@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+# Get current location of build script
+basedir=$( cd "$(dirname "$0")" ; pwd -P )
+root_dir=$(dirname "${basedir}")
+
+INPUT_FILE=$(ls -d input/*)
+mkdir -p output
+
+python "${root_dir}"/src/ingest.py -i "${INPUT_FILE}" --variables "${@:2}"
