@@ -1,3 +1,4 @@
+name: ingest
 channels:
   - conda-forge
 dependencies:

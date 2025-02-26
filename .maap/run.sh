@@ -6,5 +6,5 @@ root_dir=$(dirname "${basedir}")
 
 INPUT_FILE=$(ls -d input/*)
 mkdir -p output
-
+source activate ingest
 python "${root_dir}"/src/ingest.py -i "${INPUT_FILE}" --variables "${@:1}" -o output
