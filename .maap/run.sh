@@ -7,4 +7,4 @@ root_dir=$(dirname "${basedir}")
 INPUT_FILE=$(ls -d input/*)
 mkdir -p output
 
-python "${root_dir}"/src/ingest.py -i "${INPUT_FILE}" --variables "${@:2}"
+python "${root_dir}"/src/ingest.py -i "${INPUT_FILE}" --variables "${@:1}" -o output
