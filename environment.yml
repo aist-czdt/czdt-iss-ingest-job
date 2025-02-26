@@ -4,5 +4,6 @@ channels:
 dependencies:
   - xarray
   - netCDF4
+  - rioxarray
   - numpy
   - gdal
