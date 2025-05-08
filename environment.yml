@@ -7,5 +7,7 @@ dependencies:
   - rioxarray
   - numpy
   - gdal
-  - maap-py
   - boto3
+  - pip
+  - pip:
+    - maap-py
