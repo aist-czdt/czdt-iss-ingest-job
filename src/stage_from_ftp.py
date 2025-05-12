@@ -41,15 +41,17 @@ def parse_arguments():
     parser.add_argument("--search-keyword", required=True,
                         help="The keyword to search within the ftp files of interest")
     parser.add_argument("--s3-bucket", required=True,
-                        help="The name of the target S3 bucket for uploading the granule.")
+                        help="The name of the target S3 bucket for uploading the ftp files.")
     parser.add_argument("--s3-prefix", default="",
                         help="Optional S3 prefix (folder path) within the bucket. Do not use leading/trailing slashes. "
-                             "The granule will be placed under <s3-prefix>/<collection-id>/<filename>.")
+                             "The ftp files will be placed under <s3-prefix>/<ftp-server>/<filename>.")
     parser.add_argument("--local-download-path", required=False, default="output",
-                        help="Local directory path where the granule will be temporarily downloaded.")
+                        help="Local directory path where the files will be temporarily downloaded.")
     parser.add_argument("--role-arn",
                         help="Optional AWS IAM Role ARN to assume for S3 upload. "
                              "Useful for cross-account S3 bucket access.")
+    parser.add_argument("--overwrite-existing", default="false",
+                        help="If set to true, ftp files will be processed and re-uploaded even if already previously uploaded.")
     return parser.parse_args()
 
 
@@ -90,14 +92,26 @@ def list_ftp_files(ftp: ftplib.FTP, path: str, keywords: List[str]) -> List[str]
     return matches
 
 
-def search_and_download_ftp_files(ftp_server: str, search_keyword: str, local_download_dir: str) -> List[str]:
+def search_and_download_ftp_files(
+    ftp_server: str, 
+    search_keyword: str, 
+    local_download_dir: str, 
+    overwrite_existing: bool,
+    s3_client, 
+    bucket_name: str, 
+    s3_prefix: str
+    ) -> List[str]:
     """
     Searches for ftp files containing the specified keyword and downloads them to the local directory.
 
     Args:
         ftp_server (str): The ftp server to use for the file downloads.
         search_keyword (str): The keyword to search within the ftp files of interest.
-        local_download_dir (str): The directory to download the granule into.
+        local_download_dir (str): The directory to download the ftp files into.
+        overwrite_existing (bool): Whether to re-upload if already previously uploaded.
+        s3_client (boto3.client): The S3 client to use for the upload.
+        bucket_name (str): The name of the S3 bucket.
+        s3_prefix (str): The S3 prefix (acts like a folder). Can be empty.
 
     Returns:
         str: The full path to the locally downloaded ftp files.
@@ -121,7 +135,12 @@ def search_and_download_ftp_files(ftp_server: str, search_keyword: str, local_do
         if not file_results:
             raise FtpFileNotFoundError(f"Keyword '{search_keyword}' yielded no results in '{ftp_server}'.")
 
-        logging.info(f"{len(file_results)} file(s) found. Preparing to download...")
+        logging.info(f"{len(file_results)} file(s) found.")
+
+        if overwrite_existing:
+            logging.info("Overwrite = true. Preparing to download...")
+        else:
+            logging.info("Overwrite = false. Checking for previous non-uploaded files...")  
 
         # Ensure the local download directory exists and is a directory
         if not os.path.exists(local_download_dir):
@@ -132,8 +151,16 @@ def search_and_download_ftp_files(ftp_server: str, search_keyword: str, local_do
 
         local_files = []
 
-        # Attempt to download using ftp.retrbinary()
-        for filename in file_results:    
+        for filename in file_results: 
+            if not overwrite_existing:
+                s3_key = get_s3_key(s3_prefix, ftp_server, filename)
+                file_exists = s3_file_exists(s3_client, bucket_name, s3_key)
+
+                if file_exists:
+                    logging.info(f"Previous upload found for {filename}. Skipping.")
+                    continue
+
+            # Attempt to download using ftp.retrbinary()
             ftp.retrbinary("RETR " + filename ,open(f"{local_download_dir}/{filename}", 'wb').write)
             local_files.append(f"{local_download_dir}/{filename}")
 
@@ -218,16 +245,7 @@ def upload_to_s3(s3_client, local_file_paths: List[str], bucket_name: str, s3_pr
             raise FileNotFoundError(f"Local file '{local_file_path}' intended for upload does not exist.")
 
         file_name = os.path.basename(local_file_path)
-
-        # Construct the S3 object key, ensuring no leading/trailing slashes are mishandled.
-        s3_key_parts = []
-        if s3_prefix:
-            s3_key_parts.append(s3_prefix.strip('/'))  # Remove slashes to prevent issues
-        s3_key_parts.append(f"ftp_{ftp_server.replace('.', '-')}")  # Collection ID as a folder
-        s3_key_parts.append(file_name)  # The actual filename
-
-        # Join parts with '/', filtering out any empty strings (e.g., if s3_prefix was empty)
-        s3_key = "/".join(part for part in s3_key_parts if part)
+        s3_key = get_s3_key(s3_prefix, ftp_server, file_name)
 
         logging.info(f"Starting upload of '{local_file_path}' to S3 bucket '{bucket_name}' with key '{s3_key}'.")
 
@@ -240,6 +258,44 @@ def upload_to_s3(s3_client, local_file_paths: List[str], bucket_name: str, s3_pr
         except Exception as e:  # Catch other potential errors (e.g., file read issues not caught by boto3)
             logging.error(f"An unexpected error occurred during S3 upload of '{local_file_path}': {e}", exc_info=True)
             raise UploadError(f"Unexpected error during S3 upload of {local_file_path}: {e}")
+
+
+def get_s3_key(s3_prefix: str, ftp_server: str, file_name: str):
+    """
+    Get the full s3 key for a given file name.
+
+    Args:
+        s3_prefix (str): The S3 prefix (acts like a folder). Can be empty.
+        ftp_server (str): The ftp server, used to create a subfolder in S3.
+        file_name (str): The file name.
+    """  
+    # Construct the S3 object key, ensuring no leading/trailing slashes are mishandled.
+    s3_key_parts = []
+    if s3_prefix:
+        s3_key_parts.append(s3_prefix.strip('/'))  # Remove slashes to prevent issues
+    s3_key_parts.append(f"ftp_{ftp_server.replace('.', '-')}")  # ftp server as a folder
+    s3_key_parts.append(file_name)  # The actual filename
+
+    # Join parts with '/', filtering out any empty strings (e.g., if s3_prefix was empty)
+    s3_key = "/".join(part for part in s3_key_parts if part)
+
+    return s3_key
+
+
+def s3_file_exists(s3_client, bucket_name: str, key: str):
+    """
+    Checks if an s3 file exists.
+
+    Args:
+        s3_client (boto3.client): The S3 client to use for the upload.
+        bucket_name (str): The name of the S3 bucket.
+        key: The s3 file key.
+    """  
+    try:
+        s3_client.head_object(Bucket=bucket_name, Key=key)
+        return True
+    except:
+        return False
 
 
 # --- File Cleanup ---
@@ -275,19 +331,26 @@ def main():
     """
     args = parse_arguments()
     downloaded_file_paths = []  # Initialize to ensure it's defined for the finally block
+    true = "true"
 
     try:
-        # Step 1: Search for and download the ftp files
-        downloaded_file_paths = search_and_download_ftp_files(
-            args.ftp_server,
-            args.search_keyword,
-            args.local_download_path
-        )
-
-        # Step 2: Get S3 client (with optional role assumption)
+        # Step 1: Get S3 client (with optional role assumption)
         # Determine AWS region (can be None to use default configured for boto3)
         aws_region_for_s3 = os.environ.get('AWS_REGION', 'us-west-2')  # Or get from args if you add it
         s3_client = get_s3_client(role_arn=args.role_arn, aws_region=aws_region_for_s3)
+
+        _overwrite_existing = args.overwrite_existing.casefold() == true.casefold()
+
+        # Step 2: Search for and download the ftp files
+        downloaded_file_paths = search_and_download_ftp_files(
+            args.ftp_server,
+            args.search_keyword,
+            args.local_download_path,
+            _overwrite_existing,
+            s3_client,
+            args.s3_bucket,
+            args.s3_prefix
+        )
 
         # Step 3: Upload the downloaded ftp files to S3
         upload_to_s3(
@@ -298,11 +361,11 @@ def main():
             args.ftp_server
         )
 
-        logging.info("Granule processing and upload completed successfully!")
+        logging.info("FTP file processing and upload completed successfully!")
 
     except FtpFileNotFoundError as e:
         logging.error(f"TERMINATED: FTP file not found. Details: {e}")
-        sys.exit(2)  # Specific exit code for granule not found
+        sys.exit(2)  # Specific exit code for file not found
     except DownloadError as e:
         logging.error(f"TERMINATED: Download failed. Details: {e}")
         sys.exit(3)  # Specific exit code for download error

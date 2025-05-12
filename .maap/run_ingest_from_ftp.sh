@@ -8,6 +8,7 @@ search_keyword="$2"
 s3_bucket="$3"
 s3_prefix="$4"
 role_arn="$5"
+overwrite_existing="$6"
 
 mkdir -p output
 source activate ingest
@@ -17,4 +18,5 @@ python "${root_dir}"/src/stage_from_ftp.py \
     --search-keyword "${search_keyword}" \
     --s3-bucket "${s3_bucket}" \
     --s3-prefix "${s3_prefix}" \
-    --role-arn "${role_arn}"
+    --role-arn "${role_arn}" \
+    --overwrite-existing "${overwrite_existing}" 
