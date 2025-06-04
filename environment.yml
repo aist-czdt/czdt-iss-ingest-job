@@ -7,6 +7,7 @@ dependencies:
   - rioxarray
   - numpy
   - gdal
+  - rio-stac
   - boto3
   - pip
   - pip:

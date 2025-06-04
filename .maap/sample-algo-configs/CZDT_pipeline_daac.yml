@@ -46,10 +46,6 @@ inputs:
     name: job_queue 
     required: true
   - default: none
-    description: The ARN of the CZDT AWS role.
-    name: czdt_role_arn 
-    required: true
-  - default: none
     description: The s3 url of the ZARR config file.
     name: zarr_config_url 
     required: true
