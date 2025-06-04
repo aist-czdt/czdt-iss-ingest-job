@@ -212,7 +212,7 @@ async def convert_to_zarr(args, maap, ingest_result):
 
 
 async def convert_zarr_to_cog(args, maap, convert_to_zarr_result):
-    zarr_files = get_dps_output(convert_to_zarr_result, ".zarr")       
+    zarr_files = get_dps_output([convert_to_zarr_result], ".zarr")       
     zarr_file_name = zarr_files[0].split("/")[-1]
 
     msg = f"Converting ZARR(s) to COG for {zarr_file_name}"
