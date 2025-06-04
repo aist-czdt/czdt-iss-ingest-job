@@ -338,17 +338,9 @@ def main():
         # If no exception, or if the exception was something else (like a later part of script, not here),
         # and downloaded_granule_path is set, then cleanup.
         current_exception = sys.exc_info()[1]
-        if downloaded_granule_path and not isinstance(current_exception, UploadError):
-            if current_exception:  # An error occurred, but it wasn't an UploadError
-                logging.info(
-                    f"An error ({type(current_exception).__name__}) occurred, but attempting cleanup of downloaded "
-                    f"file as it was not an UploadError.")
-            else:  # No error occurred, proceed with cleanup
-                logging.info("Process completed (or an error not related to upload occurred), cleaning up local file.")
-            cleanup_local_file(downloaded_granule_path)
-        elif downloaded_granule_path and isinstance(current_exception, UploadError):
+        if downloaded_granule_path and isinstance(current_exception, UploadError):
             logging.warning(
-                f"Upload failed. Local file '{downloaded_granule_path}' will NOT be deleted to allow for inspection.")
+                f"Upload failed. Inspect the file '{downloaded_granule_path}' for errors.")
 
 
 if __name__ == "__main__":
