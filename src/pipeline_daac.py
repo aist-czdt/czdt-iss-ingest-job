@@ -143,6 +143,20 @@ def parse_s3_path(s3_path: str) -> tuple[str, str]:
 
     return first_folder, remaining_path
 
+def get_dps_output(jobs: [DPSJob], file_ext: str) -> [str]:
+    s3 = boto3.resource('s3')
+    output_files = []
+    job_outputs = [next((path for path in j.retrieve_result() if path.startswith("s3")), None) for j in jobs]
+    
+    for job_output in job_outputs:
+        bucket_name, path = parse_s3_path(job_output)
+        dps_bucket = s3.Bucket(bucket_name)
+        for obj in dps_bucket.objects.filter(Prefix=path):   
+            if obj.key.endswith(file_ext):
+                output_files.append(f"s3://{bucket_name}/{obj.key}")
+
+    return output_files
+
 
 # ETL FUNCTIONS
 # TODO: exit with error code on any async_job failure
@@ -165,14 +179,17 @@ async def ingest(args, maap):
 async def transform(args, maap, ingest_result):
     convert_to_zarr_result = await convert_to_zarr(args, maap, ingest_result)
     convert_zarr_to_cog_result = await convert_zarr_to_cog(args, maap, convert_to_zarr_result)
-    return convert_zarr_to_cog_result;
+    return convert_zarr_to_cog_result
 
 async def convert_to_zarr(args, maap, ingest_result):
     msg = f"Started ZARR extraction for {args.granule_id}"
     print(msg)   
     cmss_logger(args, "INFO", msg)
     variables_to_extract = "PRECTOTCORR PRECTOT PRECCON"
-    ingested_granule = f"s3://{args.s3_bucket}/{args.s3_prefix}/{args.collection_id}/{args.granule_id}"
+    nc4_files = get_dps_output([ingest_result], ".nc4")       
+    granule_file_name = nc4_files[0].split("/")[-1]
+
+    ingested_granule = f"s3://{args.s3_bucket}/{args.s3_prefix}/{args.collection_id}/{granule_file_name}"
     output_zarr_name = os.path.basename(ingested_granule).replace(".nc4", ".zarr")
 
     print(f"Submitting CZDT_NETCDF_TO_ZARR job")  
@@ -191,21 +208,16 @@ async def convert_to_zarr(args, maap, ingest_result):
     aj = AsyncJob(cf2_zarr_job.id)
     await aj.get_job_status()
       
-    cmss_logger(args, "INFO", f"Started ZARR extraction for {args.granule_id}")
     return cf2_zarr_job
 
 
 async def convert_zarr_to_cog(args, maap, convert_to_zarr_result):
-    msg = f"Converting ZARR(s) to COG for {args.granule_id}"
+    zarr_files = get_dps_output(convert_to_zarr_result, ".zarr")       
+    zarr_file_name = zarr_files[0].split("/")[-1]
+
+    msg = f"Converting ZARR(s) to COG for {zarr_file_name}"
     print(msg)   
     cmss_logger(args, "INFO", msg)
-    ingested_granule = f"s3://{args.s3_bucket}/{args.s3_prefix}/{args.collection_id}/{args.granule_id}"
-    output_zarr_name = os.path.basename(ingested_granule).replace(".nc4", ".zarr")
-    output_s3_path = next((path for path in convert_to_zarr_result.retrieve_result() if path.startswith("s3")), None)
-    bucket_name, path = parse_s3_path(output_s3_path)
-    zarr_location =  f"s3://{bucket_name}/{path}/{output_zarr_name}"
-
-    print(f"zarr_location: {zarr_location}")
 
     print(f"Submitting CZDT_ZARR_TO_COG job(s)")  
     jobs = [
@@ -214,14 +226,14 @@ async def convert_zarr_to_cog(args, maap, convert_to_zarr_result):
             algo_id="CZDT_ZARR_TO_COG",
             version="master",
             queue=args.job_queue,
-            zarr=zarr_location,
+            zarr=zarr_file,
             zarr_access="stage",
             time="time",
             latitude="lat",
             longitude='lon',
-            output_name=zarr_output_name, # MERRA2_400.tavg1_2d_flx_Nx.20250331
+            output_name=zarr_file.split("/")[-1].replace(".zarr", ""), # MERRA2_400.tavg1_2d_flx_Nx.20250331
         )
-        for zarr_output_name in str(output_zarr_name).split(".zarr") if zarr_output_name.strip()
+        for zarr_file in zarr_files
     ]
     
     error_messages = [job_error_message(job) for job in jobs if not job.id]
@@ -239,19 +251,7 @@ async def convert_zarr_to_cog(args, maap, convert_to_zarr_result):
 
 
 def catalog(args, maap, convert_zarr_to_cog_result):
-
-    s3 = boto3.resource('s3')
-    job_outputs = [next((path for path in job.retrieve_result() if path.startswith("s3")), None) for job in convert_zarr_to_cog_result]
-    
-    tif_files = []
-    
-    for job_output in job_outputs:
-        bucket_name, path = parse_s3_path(job_output)
-        dps_bucket = s3.Bucket(bucket_name)
-        for obj in dps_bucket.objects.filter(Prefix=path):   
-            if obj.key.endswith(".tif"):
-                tif_files.append(f"s3://{bucket_name}/{obj.key}")
-                    
+    tif_files = get_dps_output(convert_zarr_to_cog_result, ".tif")                   
     czdt_token = maap.secrets.get_secret(f"{args.titiler_token_secret_name}")
 
     #TODO: Parallelize and fix starttime
@@ -288,6 +288,8 @@ async def main():
         ingest_result = await ingest(args, maap)
         transform_result = await transform(args, maap, ingest_result)
         catalog(args, maap, transform_result)
+
+        # TODO: FILE CLEAN-UP
 
         logging.info("The DAAC pipeline completed successfully!")
 
