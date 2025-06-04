@@ -59,5 +59,5 @@ inputs:
     name: local_download_path
     required: true
 queue: maap-dps-czdt-worker-8gb
-repository_url: https://github.com/sujen1412/czdt-iss-ingest-job.git
+repository_url: https://github.com/aist-czdt/czdt-iss-ingest-job.git
 run_command: czdt-iss-ingest-job/.maap/run_pipeline_from_daac.sh
