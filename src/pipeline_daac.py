@@ -37,20 +37,18 @@ def parse_arguments():
                              "The granule will be placed under <s3-prefix>/<collection-id>/<filename>.")
     parser.add_argument("--local-download-path", required=False, default="output",
                         help="Local directory path where the granule will be temporarily downloaded.")
-    parser.add_argument("--role-arn",
+    parser.add_argument("--role-arn", required=True,
                         help="Optional AWS IAM Role ARN to assume for S3 upload. "
                              "Useful for cross-account S3 bucket access.")
-    parser.add_argument("--cmss-logger-host",
+    parser.add_argument("--cmss-logger-host", required=True,
                         help="Used for logging pipeline messages.")
-    parser.add_argument("--mmgis-host",
+    parser.add_argument("--mmgis-host", required=True,
                         help="Used for cataloging stac items.")
-    parser.add_argument("--titiler-token-secret-name",
+    parser.add_argument("--titiler-token-secret-name", required=True,
                         help="The name of the maap secret used for storing the mmgis-host token.")
-    parser.add_argument("--job-queue",
+    parser.add_argument("--job-queue", required=True,
                         help="The name of the queue for running all pipeline jobs.")
-    parser.add_argument("--czdt-role-arn",
-                        help="The ARN of the CZDT AWS role.")
-    parser.add_argument("--zarr-config-url",
+    parser.add_argument("--zarr-config-url", required=True,
                         help="The s3 url of the ZARR config file.")
     parser.add_argument("--maap-host", default="api.maap-project.org",  # Default MAAP API host
                         help="MAAP API host. Defaults to 'api.ops.maap-project.org' if not overridden by MAAP_API_HOST env var.")
@@ -108,13 +106,13 @@ def cleanup_local_file(local_file_path: str):
 
 
 # HELPER FUNCTIONS
-def cmss_logger(level, msg):
+def cmss_logger(args, level, msg):
     endpoint = "log"
     url = f"{args.cmss_logger_host}/{endpoint}"
     body = {"level": level, "msg_body": str(msg)}
     r = requests.post(url, json=body)
 
-def cmss_product_available(details):
+def cmss_product_available(args, details):
     endpoint = "product"
     url = f"{args.cmss_logger_host}/{endpoint}"
     r = requests.post(url, json=details)
@@ -148,7 +146,7 @@ def parse_s3_path(s3_path: str) -> tuple[str, str]:
 
 # ETL FUNCTIONS
 # TODO: exit with error code on any async_job failure
-async def ingest():
+async def ingest(args, maap):
     print(f"Submitting staging job using collection id {args.collection_id}; granule id {args.granule_id}")        
     staging_job = maap.submitJob(identifier=args.granule_id,
         algo_id="czdt-iss-ingest",
@@ -158,21 +156,21 @@ async def ingest():
         collection_id=args.collection_id,
         s3_bucket=args.s3_bucket,
         s3_prefix=args.s3_prefix,
-        role_arn=args.czdt_role_arn)
+        role_arn=args.role_arn)
 
     aj = AsyncJob(staging_job.id)
     await aj.get_job_status()
     return staging_job
 
-async def transform(ingest_result):
-    convert_to_zarr_result = await convert_to_zarr(ingest_result)
-    convert_zarr_to_cog_result = await convert_zarr_to_cog(convert_to_zarr_result)
+async def transform(args, maap, ingest_result):
+    convert_to_zarr_result = await convert_to_zarr(args, maap, ingest_result)
+    convert_zarr_to_cog_result = await convert_zarr_to_cog(args, maap, convert_to_zarr_result)
     return convert_zarr_to_cog_result;
 
-async def convert_to_zarr(ingest_result):
+async def convert_to_zarr(args, maap, ingest_result):
     msg = f"Started ZARR extraction for {args.granule_id}"
     print(msg)   
-    cmss_logger("INFO", msg)
+    cmss_logger(args, "INFO", msg)
     variables_to_extract = "PRECTOTCORR PRECTOT PRECCON"
     ingested_granule = f"s3://{args.s3_bucket}/{args.s3_prefix}/{args.collection_id}/{args.granule_id}"
     output_zarr_name = os.path.basename(ingested_granule).replace(".nc4", ".zarr")
@@ -193,14 +191,14 @@ async def convert_to_zarr(ingest_result):
     aj = AsyncJob(cf2_zarr_job.id)
     await aj.get_job_status()
       
-    cmss_logger("INFO", f"Started ZARR extraction for {args.granule_id}")
+    cmss_logger(args, "INFO", f"Started ZARR extraction for {args.granule_id}")
     return cf2_zarr_job
 
 
-async def convert_zarr_to_cog(convert_to_zarr_result):
+async def convert_zarr_to_cog(args, maap, convert_to_zarr_result):
     msg = f"Converting ZARR(s) to COG for {args.granule_id}"
     print(msg)   
-    cmss_logger("INFO", msg)
+    cmss_logger(args, "INFO", msg)
     ingested_granule = f"s3://{args.s3_bucket}/{args.s3_prefix}/{args.collection_id}/{args.granule_id}"
     output_zarr_name = os.path.basename(ingested_granule).replace(".nc4", ".zarr")
     output_s3_path = next((path for path in convert_to_zarr_result.retrieve_result() if path.startswith("s3")), None)
@@ -240,7 +238,7 @@ async def convert_zarr_to_cog(convert_to_zarr_result):
     return jobs
 
 
-def catalog(convert_zarr_to_cog_result):
+def catalog(args, maap, convert_zarr_to_cog_result):
 
     s3 = boto3.resource('s3')
     job_outputs = [next((path for path in job.retrieve_result() if path.startswith("s3")), None) for job in convert_zarr_to_cog_result]
@@ -267,12 +265,12 @@ def catalog(convert_zarr_to_cog_result):
 
     product_details = {"collection":args.collection_id,
                        "ogc":f"{args.mmgis_host}/stac/collections/{args.collection_id}/items", "uris": tif_files}
-    cmss_product_available(product_details)
-    cmss_logger("INFO", f"Product available for collection {args.collection_id}")
+    cmss_product_available(args, product_details)
+    cmss_logger(args, "INFO", f"Product available for collection {args.collection_id}")
 
 
 # --- Main Execution Block ---
-def main():
+async def main():
     """
     Main function to orchestrate the ingest, transform and catalog pipeline.
     Handles argument parsing and top-level error management.
@@ -287,9 +285,9 @@ def main():
         maap_host_to_use = os.environ.get('MAAP_API_HOST', args.maap_host)
         maap = get_maap_instance(maap_host_to_use)
 
-        ingest_result = await ingest()
-        transform_result = await transform(ingest_result)
-        catalog(transform_result)
+        ingest_result = await ingest(args, maap)
+        transform_result = await transform(args, maap, ingest_result)
+        catalog(args, maap, transform_result)
 
         logging.info("The DAAC pipeline completed successfully!")
 
@@ -304,4 +302,4 @@ def main():
         sys.exit(1)  # General error
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

@@ -12,8 +12,7 @@ cmss_logger_host="$6"
 mmgis_host="$7"
 titiler_token_secret_name="$8"
 job_queue="$9"
-czdt_role_arn="$10"
-zarr_config_url="$11"
+zarr_config_url="${10}"
 
 mkdir -p output
 source activate ingest
@@ -28,5 +27,4 @@ python "${root_dir}"/src/pipeline_daac.py \
     --mmgis-host "${mmgis_host}" \
     --titiler-token-secret-name "${titiler_token_secret_name}" \
     --job-queue "${job_queue}" \
-    --czdt-role-arn "${czdt_role_arn}" \
     --zarr-config-url "${zarr_config_url}"
