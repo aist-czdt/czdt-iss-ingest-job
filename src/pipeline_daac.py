@@ -3,6 +3,7 @@ import os
 import sys
 import logging
 import boto3
+import json
 from botocore.exceptions import ClientError
 from maap.maap import MAAP  # Confirmed import for maap-py
 from maap.dps.dps_job import DPSJob
@@ -11,10 +12,16 @@ from async_job import AsyncJob
 import create_stac_items
 import requests
 from os.path import basename, join
+from urllib.parse import urlparse
 
 # Configure basic logging to provide feedback on the script's progress and any errors.
 # The logging level can be adjusted (e.g., to logging.DEBUG for more verbose output).
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
+
+# --- Custom Exceptions ---
+class UploadError(Exception):
+    """Custom exception for errors encountered during S3 upload."""
+    pass
 
 
 # --- Argument Parsing ---
@@ -143,19 +150,74 @@ def parse_s3_path(s3_path: str) -> tuple[str, str]:
 
     return first_folder, remaining_path
 
-def get_dps_output(jobs: [DPSJob], file_ext: str) -> [str]:
+def get_dps_output(jobs: [DPSJob], file_ext: str, prefixes_only: bool=False) -> [str]:
     s3 = boto3.resource('s3')
-    output_files = []
+    output = set()
     job_outputs = [next((path for path in j.retrieve_result() if path.startswith("s3")), None) for j in jobs]
     
     for job_output in job_outputs:
         bucket_name, path = parse_s3_path(job_output)
         dps_bucket = s3.Bucket(bucket_name)
         for obj in dps_bucket.objects.filter(Prefix=path):   
-            if obj.key.endswith(file_ext):
-                output_files.append(f"s3://{bucket_name}/{obj.key}")
+            if prefixes_only:
+                folder_prefix = os.path.dirname(obj.key)
+                if folder_prefix.endswith(file_ext):
+                    output.add(f"s3://{bucket_name}/{folder_prefix}")
+            else:
+                if obj.key.endswith(file_ext):
+                    output.add(f"s3://{bucket_name}/{obj.key}")
 
-    return output_files
+    return list(output)
+
+def get_granule_from_nc4(args, nc4):
+    granule_file_name = nc4.split("/")[-1]
+    ingested_granule = f"s3://{args.s3_bucket}/{args.s3_prefix}/{args.collection_id}/{granule_file_name}"
+    return ingested_granule
+
+def get_zarr_from_nc4(args, nc4):
+    output_zarr_name = os.path.basename(get_granule_from_nc4(args, nc4)).replace(".nc4", ".zarr")
+    return output_zarr_name
+
+def upload_to_s3(s3_client, local_file_path: str, bucket_name: str, s3_prefix: str):
+    """
+    Uploads the specified local file to an S3 bucket. The file is placed under a
+    constructed key: <s3_prefix>/<collection_id>/<filename>.
+
+    Args:
+        s3_client (boto3.client): The S3 client to use for the upload.
+        local_file_path (str): The path to the local file to be uploaded.
+        bucket_name (str): The name of the S3 bucket.
+        s3_prefix (str): The S3 prefix (acts like a folder). Can be empty.
+
+    Raises:
+        FileNotFoundError: If the local file does not exist.
+        UploadError: If the S3 upload fails.
+    """
+    if not os.path.exists(local_file_path):
+        raise FileNotFoundError(f"Local file '{local_file_path}' intended for upload does not exist.")
+
+    file_name = os.path.basename(local_file_path)
+
+    # Construct the S3 object key, ensuring no leading/trailing slashes are mishandled.
+    s3_key_parts = []
+    if s3_prefix:
+        s3_key_parts.append(s3_prefix.strip('/'))  # Remove slashes to prevent issues
+    s3_key_parts.append(file_name)  # The actual filename
+
+    # Join parts with '/', filtering out any empty strings (e.g., if s3_prefix was empty)
+    s3_key = "/".join(part for part in s3_key_parts if part)
+
+    logging.info(f"Starting upload of '{local_file_path}' to S3 bucket '{bucket_name}' with key '{s3_key}'.")
+
+    try:
+        s3_client.upload_file(local_file_path, bucket_name, s3_key)
+        logging.info(f"Successfully uploaded '{file_name}' to 's3://{bucket_name}/{s3_key}'.")
+    except ClientError as e:
+        logging.error(f"Failed to upload '{local_file_path}' to S3 (s3://{bucket_name}/{s3_key}): {e}", exc_info=True)
+        raise UploadError(f"S3 upload of {local_file_path} failed: {e}")
+    except Exception as e:  # Catch other potential errors (e.g., file read issues not caught by boto3)
+        logging.error(f"An unexpected error occurred during S3 upload of '{local_file_path}': {e}", exc_info=True)
+        raise UploadError(f"Unexpected error during S3 upload of {local_file_path}: {e}")
 
 
 # ETL FUNCTIONS
@@ -178,7 +240,8 @@ async def ingest(args, maap):
 
 async def transform(args, maap, ingest_result):
     convert_to_zarr_result = await convert_to_zarr(args, maap, ingest_result)
-    convert_zarr_to_cog_result = await convert_zarr_to_cog(args, maap, convert_to_zarr_result)
+    convert_to_concatenated_zarr_result = await convert_to_concatenated_zarr(args, maap, convert_to_zarr_result)
+    convert_zarr_to_cog_result = await convert_zarr_to_cog(args, maap, convert_to_concatenated_zarr_result)
     return convert_zarr_to_cog_result
 
 async def convert_to_zarr(args, maap, ingest_result):
@@ -186,36 +249,94 @@ async def convert_to_zarr(args, maap, ingest_result):
     print(msg)   
     cmss_logger(args, "INFO", msg)
     variables_to_extract = "PRECTOTCORR PRECTOT PRECCON"
-    nc4_files = get_dps_output([ingest_result], ".nc4")       
-    granule_file_name = nc4_files[0].split("/")[-1]
+    nc4_files = get_dps_output([ingest_result], ".nc4")   
+    maap_username = maap.profile.account_info()['username']
 
-    ingested_granule = f"s3://{args.s3_bucket}/{args.s3_prefix}/{args.collection_id}/{granule_file_name}"
-    output_zarr_name = os.path.basename(ingested_granule).replace(".nc4", ".zarr")
+    print(f"Submitting CZDT_NETCDF_TO_ZARR job(s)")  
+    jobs = [
+        maap.submitJob(identifier="czdt_netcdf_to_zarr",
+            algo_id="CZDT_NETCDF_TO_ZARR",
+            version="master",
+            queue=args.job_queue,
+            input_s3=get_granule_from_nc4(args, nc4_file),
+            zarr_access="stage",
+            config=args.zarr_config_url,
+            config_path=join('input', basename(args.zarr_config_url)),
+            pattern="*.nc4",
+            output=get_zarr_from_nc4(args, nc4_file),
+            variables=variables_to_extract
+        )
+        for nc4_file in nc4_files
+    ]
+    
+    error_messages = [job_error_message(job) for job in jobs if not job.id]
+    job_ids = [job.id for job in jobs if job.id]
+    
+    for error_message in error_messages:
+        print(f"Failed to submit job: {error_message}", file=sys.stderr)
+    
+    # Generate tasks from array
+    tasks = [AsyncJob(i).get_job_status() for i in job_ids]  
+    results = await asyncio.gather(*tasks)
+    print(jobs)
 
-    print(f"Submitting CZDT_NETCDF_TO_ZARR job")  
-    cf2_zarr_job = maap.submitJob(identifier="czdt_netcdf_to_zarr",
-        algo_id="CZDT_NETCDF_TO_ZARR",
-        version="master",
-        queue=args.job_queue,
-        input_s3=ingested_granule,
-        zarr_access="stage",
-        config=args.zarr_config_url,
-        config_path=join('input', basename(args.zarr_config_url)),
-        pattern="*.nc4",
-        output=output_zarr_name,
-        variables=variables_to_extract)    
+    s3_client = boto3.client('s3')
 
-    aj = AsyncJob(cf2_zarr_job.id)
-    await aj.get_job_status()
-      
-    return cf2_zarr_job
+    for job in jobs:
+        s3_zarr_urls = get_dps_output([job], ".zarr", True)  
+        local_zarr_path = f"output/{job.id}.json"
+        with open(local_zarr_path, 'w') as fp:
+            json.dump(s3_zarr_urls, fp, indent=2) 
+
+        # Step 4: Upload the downloaded granule to S3
+        upload_to_s3(
+            s3_client,
+            local_zarr_path,
+            "maap-ops-workspace",
+            f"{maap_username}/zarr_concat_manifests"
+        )
+
+    return jobs
 
 
-async def convert_zarr_to_cog(args, maap, convert_to_zarr_result):
-    zarr_files = get_dps_output([convert_to_zarr_result], ".zarr")       
-    zarr_file_name = zarr_files[0].split("/")[-1]
+async def convert_to_concatenated_zarr(args, maap, convert_to_zarr_results):
+    msg = f"Started ZARR concatenation for {args.granule_id}"
+    maap_username = maap.profile.account_info()['username']
+    print(msg)   
+    cmss_logger(args, "INFO", msg)
 
-    msg = f"Converting ZARR(s) to COG for {zarr_file_name}"
+    jobs = [
+        maap.submitJob(
+            identifier=f"cf2zarr_zarrcat_prep_{convert_to_zarr_result.id[:6]}",
+            algo_id="CZDT_ZARR_CONCAT",
+            version="master",
+            queue=args.job_queue,
+            config="s3://maap-ops-workspace/rileykk/sample_merra2_cfg.yaml",
+            config_path='input/sample_merra2_cfg.yaml',
+            zarr_manifest=f"s3://maap-ops-workspace/{maap_username}/zarr_concat_manifests/{convert_to_zarr_result.id}.json",
+            zarr_access="mount",
+            duration="P5D",
+            output=f"concat.{convert_to_zarr_result.id}.zarr",
+        ) for convert_to_zarr_result in convert_to_zarr_results
+    ]
+
+    error_messages = [job_error_message(job) for job in jobs if not job.id]
+    job_ids = [job.id for job in jobs if job.id]
+    
+    for error_message in error_messages:
+        print(f"Failed to submit job: {error_message}", file=sys.stderr)
+    
+    # Generate tasks from array
+    tasks = [AsyncJob(i).get_job_status() for i in job_ids]  
+    results = await asyncio.gather(*tasks)
+    print(jobs)
+
+    return jobs
+
+
+async def convert_zarr_to_cog(args, maap, convert_to_concatenated_zarr_result):
+    zarr_files = get_dps_output(convert_to_concatenated_zarr_result, ".zarr", True)       
+    msg = f"Converting {len(zarr_files)} ZARR(s) to COG(s)"
     print(msg)   
     cmss_logger(args, "INFO", msg)
 
@@ -226,7 +347,7 @@ async def convert_zarr_to_cog(args, maap, convert_to_zarr_result):
             algo_id="CZDT_ZARR_TO_COG",
             version="master",
             queue=args.job_queue,
-            zarr=zarr_file,
+            zarr=f"{zarr_file}/",
             zarr_access="stage",
             time="time",
             latitude="lat",
