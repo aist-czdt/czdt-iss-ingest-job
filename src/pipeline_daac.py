@@ -169,13 +169,13 @@ def get_dps_output(jobs: [DPSJob], file_ext: str, prefixes_only: bool=False) -> 
 
     return list(output)
 
-def get_granule_from_nc4(args, nc4):
-    granule_file_name = nc4.split("/")[-1]
+def get_granule_from_file(args, file):
+    granule_file_name = file.split("/")[-1]
     ingested_granule = f"s3://{args.s3_bucket}/{args.s3_prefix}/{args.collection_id}/{granule_file_name}"
     return ingested_granule
 
-def get_zarr_from_nc4(args, nc4):
-    output_zarr_name = os.path.basename(get_granule_from_nc4(args, nc4)).replace(".nc4", ".zarr")
+def get_zarr_from_file(args, file, ext):
+    output_zarr_name = os.path.basename(get_granule_from_file(args, file)).replace(ext, ".zarr")
     return output_zarr_name
 
 def upload_to_s3(s3_client, local_file_path: str, bucket_name: str, s3_prefix: str):
@@ -224,7 +224,7 @@ def upload_to_s3(s3_client, local_file_path: str, bucket_name: str, s3_prefix: s
 # TODO: exit with error code on any async_job failure
 async def ingest(args, maap):
     print(f"Submitting staging job using collection id {args.collection_id}; granule id {args.granule_id}")        
-    staging_job = maap.submitJob(identifier=args.granule_id,
+    staging_job = maap.submitJob(identifier=f"ISS-Pipeline_ingest_{args.granule_id[-10:]}",
         algo_id="czdt-iss-ingest",
         version="main",
         queue=args.job_queue,
@@ -245,28 +245,43 @@ async def transform(args, maap, ingest_result):
     return convert_zarr_to_cog_result
 
 async def convert_to_zarr(args, maap, ingest_result):
+    EXT_NC = ".nc"
+    EXT_NC4 = ".nc4"
     msg = f"Started ZARR extraction for {args.granule_id}"
     print(msg)   
     cmss_logger(args, "INFO", msg)
+    #TODO: parameterize
     variables_to_extract = "PRECTOTCORR PRECTOT PRECCON"
-    nc4_files = get_dps_output([ingest_result], ".nc4")   
+    # Support .nc4 OR .nc
+    nc_pattern = EXT_NC4
+    nc_files = get_dps_output([ingest_result], EXT_NC4)   
+
+    if len(nc_files) == 0:
+        # No .nc4 output files found. Now try looking for .nc files
+        nc_files = get_dps_output([ingest_result], EXT_NC)  
+
+        if len(nc_files) > 0:
+            nc_pattern = EXT_NC
+            # TODO: determine variables dynamically based on file type
+            variables_to_extract = ""
+
     maap_username = maap.profile.account_info()['username']
 
     print(f"Submitting CZDT_NETCDF_TO_ZARR job(s)")  
     jobs = [
-        maap.submitJob(identifier="czdt_netcdf_to_zarr",
+        maap.submitJob(identifier=f"ISS-Pipeline_netcdf_2_zarr_{nc_file[-7:]}",
             algo_id="CZDT_NETCDF_TO_ZARR",
             version="master",
             queue=args.job_queue,
-            input_s3=get_granule_from_nc4(args, nc4_file),
+            input_s3=get_granule_from_file(args, nc_file),
             zarr_access="stage",
             config=args.zarr_config_url,
             config_path=join('input', basename(args.zarr_config_url)),
-            pattern="*.nc4",
-            output=get_zarr_from_nc4(args, nc4_file),
+            pattern=f"*{nc_pattern}",
+            output=get_zarr_from_file(args, nc_file, nc_pattern),
             variables=variables_to_extract
         )
-        for nc4_file in nc4_files
+        for nc_file in nc_files
     ]
     
     error_messages = [job_error_message(job) for job in jobs if not job.id]
@@ -307,7 +322,7 @@ async def convert_to_concatenated_zarr(args, maap, convert_to_zarr_results):
 
     jobs = [
         maap.submitJob(
-            identifier=f"cf2zarr_zarrcat_prep_{convert_to_zarr_result.id[:6]}",
+            identifier=f"ISS-Pipeline_zarr_concat_{convert_to_zarr_result.id[-7:]}",
             algo_id="CZDT_ZARR_CONCAT",
             version="master",
             queue=args.job_queue,
@@ -343,7 +358,7 @@ async def convert_zarr_to_cog(args, maap, convert_to_concatenated_zarr_result):
     print(f"Submitting CZDT_ZARR_TO_COG job(s)")  
     jobs = [
         maap.submitJob(
-            identifier="zarr2cog",
+            identifier=f"ISS-Pipeline_zarr_2_cog_{zarr_file[-7:]}",
             algo_id="CZDT_ZARR_TO_COG",
             version="master",
             queue=args.job_queue,
