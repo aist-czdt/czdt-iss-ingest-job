@@ -1,0 +1,73 @@
+algorithm_description: CZDT ISS Product Ingest - Generic pipeline for DAAC, S3 NetCDF, and S3 Zarr inputs
+algorithm_name: czdt-iss-product-ingest
+algorithm_version: main
+build_command: czdt-iss-ingest-job/.maap/build.sh
+disk_space: 50GB
+docker_container_url: mas.maap-project.org/root/maap-workspaces/custom_images/maap_base:v4.2.0
+inputs:
+  config: []
+  file: []
+  positional:
+  - default: none
+    description: DAAC Granule ID (mutually exclusive with input_s3)
+    name: granule_id
+    required: false
+  - default: none
+    description: S3 URL of input file - NetCDF or Zarr (mutually exclusive with granule_id)
+    name: input_s3
+    required: false
+  - default: none
+    description: Collection Concept ID (required for DAAC input)
+    name: collection_id
+    required: false
+  - default: none
+    description: Target S3 bucket for uploading processed files
+    name: s3_bucket
+    required: true
+  - default: ""
+    description: Optional S3 prefix (folder path) within the bucket
+    name: s3_prefix
+    required: false
+  - default: none
+    description: AWS IAM Role ARN to assume for S3 upload
+    name: role_arn 
+    required: true
+  - default: none
+    description: Host for logging pipeline messages
+    name: cmss_logger_host 
+    required: true
+  - default: none
+    description: Host for cataloging STAC items
+    name: mmgis_host 
+    required: true
+  - default: none
+    description: MAAP secret name for MMGIS host token
+    name: titiler_token_secret_name 
+    required: true
+  - default: none
+    description: Queue name for running pipeline jobs
+    name: job_queue 
+    required: true
+  - default: none
+    description: S3 URL of the ZARR config file
+    name: zarr_config_url 
+    required: true
+  - default: "*"
+    description: Variables to extract from NetCDF (default all variables)
+    name: variables
+    required: false
+  - default: "false"
+    description: Enable Zarr concatenation step (true/false)
+    name: enable_concat
+    required: false
+  - default: "output"
+    description: Local directory for temporary downloads
+    name: local_download_path
+    required: false
+  - default: "api.maap-project.org"
+    description: MAAP API host
+    name: maap_host
+    required: false
+queue: maap-dps-czdt-worker-8gb
+repository_url: https://github.com/aist-czdt/czdt-iss-ingest-job.git
+run_command: czdt-iss-ingest-job/.maap/run_product_ingest.sh
