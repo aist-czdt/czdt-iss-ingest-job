@@ -2,6 +2,10 @@ from maap.maap import MAAP
 maap = MAAP()
 import asyncio
 
+class JobFailedException(Exception):
+    """Exception raised when a job fails"""
+    pass
+
 class AsyncJob:
     
     def __init__(self, job_id):
@@ -17,7 +21,9 @@ class AsyncJob:
             self.status = job_status
             self.status_changed.set()
     
-        if self.status not in {"Accepted", "Running"}:
+        if self.status == "Failed":
+            raise JobFailedException(f"Job {self.job_id} failed with status: {self.status}")
+        elif self.status not in {"Accepted", "Running"}:
             self.status = "job completed"
 
     async def wait_for_status_change(self):
@@ -29,7 +35,7 @@ class AsyncJob:
     
     async def get_job_status(self):
         print(f"job id: {self.job_id}")    
-        wait_task = asyncio.create_task(self.wait_for_status_change())
+        asyncio.create_task(self.wait_for_status_change())
     
         while self.status != "job completed":
             await asyncio.sleep(10)

@@ -137,6 +137,15 @@ def get_zarr_output_name(input_s3_url: str) -> str:
     base_name = os.path.splitext(filename)[0]
     return f"{base_name}.zarr"
 
+def get_job_id():
+    if os.path.exists("_job.json"):
+        with open("_job.json", 'r') as fr:
+            job_info = json.load(fr)
+            job_id = job_info.get("job_id", "")
+            return job_id
+    return ""
+
+
 def upload_to_s3(s3_client, local_file_path: str, bucket_name: str, s3_prefix: str):
     """
     Uploads the specified local file to an S3 bucket.
@@ -320,7 +329,8 @@ def catalog(args, maap, convert_zarr_to_cog_result, convert_to_zarr_result):
     product_details = {
         "collection": args.collection_id,
         "ogc": f"{args.mmgis_host}/stac/collections/{args.collection_id}/items",
-        "uris": all_uris
+        "uris": all_uris,
+        "job_id": get_job_id()
     }
     cmss_product_available(args, product_details)
     cmss_logger(args, "INFO", f"Product available for collection {args.collection_id}")
