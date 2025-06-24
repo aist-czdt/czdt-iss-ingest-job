@@ -1,0 +1,57 @@
+algorithm_description: CZDT NetCDF pipeline
+algorithm_name: czdt-iss-netcdf-pipeline
+algorithm_version: pipeline-daac
+build_command: czdt-iss-ingest-job/.maap/build.sh
+disk_space: 50GB
+docker_container_url: mas.maap-project.org/root/maap-workspaces/custom_images/maap_base:v4.2.0
+inputs:
+  config: []
+  file: []
+  positional:
+  - default: none
+    description: The S3 URL of the input NetCDF file to process.
+    name: input_s3_url
+    required: true
+  - default: none
+    description: The Collection Concept ID (e.g., C123456789-MAAP) for the granule's collection.
+    name: collection_id
+    required: true
+  - default: none
+    description: The name of the target S3 bucket for uploading processed files.
+    name: s3_bucket
+    required: true
+  - default: none
+    description: Optional S3 prefix (folder path) within the bucket. Do not use leading/trailing slashes.
+    name: s3_prefix
+    required: true
+  - default: none
+    description: AWS IAM Role ARN to assume for S3 upload.
+    name: role_arn 
+    required: true
+  - default: none
+    description: Used for logging pipeline messages.
+    name: cmss_logger_host 
+    required: true
+  - default: none
+    description: Used for cataloging stac items.
+    name: mmgis_host 
+    required: true
+  - default: none
+    description: The name of the maap secret used for storing the mmgis-host token.
+    name: titiler_token_secret_name 
+    required: true
+  - default: none
+    description: The name of the queue for running all pipeline jobs.
+    name: job_queue 
+    required: true
+  - default: none
+    description: The s3 url of the ZARR config file.
+    name: zarr_config_url 
+    required: true
+  - default: ''
+    description: Space-separated list of variables to extract from NetCDF (optional).
+    name: variables
+    required: false
+queue: maap-dps-czdt-worker-8gb
+repository_url: https://github.com/aist-czdt/czdt-iss-ingest-job.git
+run_command: czdt-iss-ingest-job/.maap/run_pipeline_from_netcdf.sh
