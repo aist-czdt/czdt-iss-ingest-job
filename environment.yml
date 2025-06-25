@@ -9,7 +9,7 @@ dependencies:
   - gdal
   - rio-stac
   - boto3
+  - jq
   - pip
   - pip:
     - maap-py
-    - jq
