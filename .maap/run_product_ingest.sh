@@ -13,7 +13,7 @@ if [[ ! -f "_job.json" ]]; then
     echo "ERROR: _job.json file not found"
     exit 1
 fi
-
+source activate ingest
 # Read parameters from _job.json using jq
 granule_id=$(jq -r '.params.granule_id // empty' _job.json)
 input_s3=$(jq -r '.params.input_s3 // empty' _job.json)
@@ -73,7 +73,6 @@ echo "enable_concat: ${enable_concat}"
 echo "========================================"
 
 mkdir -p "${local_download_path}"
-source activate ingest
 
 # Build arguments for the generic pipeline
 args=(
