@@ -85,7 +85,7 @@ def validate_arguments(args):
 
 def detect_input_type(args):
     """Detect the type of input and processing needed"""
-    if args.granule_id:
+    if len(args.granule_id) > 0:
         return "daac"
     elif args.input_s3:
         if args.input_s3.endswith(('.nc', '.nc4')):
