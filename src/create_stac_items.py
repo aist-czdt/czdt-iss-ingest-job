@@ -12,9 +12,139 @@
 import requests
 import json
 import os
+import re
 from datetime import datetime
 from rio_stac import create_stac_item
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+
+
+def extract_variable_from_tif_filename(tif_file_path):
+    """
+    Extract variable name from TIF filename.
+    Expected format: path/to/file_VARIABLE.tif or similar patterns
+    """
+    filename = os.path.basename(tif_file_path)
+    base_name = os.path.splitext(filename)[0]
+    
+    # Try to extract variable name from common patterns
+    # Pattern 1: filename ends with _VARIABLE (e.g., MERRA2_400.tavg1_2d_flx_Nx.20250331_PRECTOT.tif)
+    if '_' in base_name:
+        parts = base_name.split('_')
+        # Try the last part as variable name
+        potential_var = parts[-1]
+        # Check if it looks like a variable name (alphanumeric, not just numbers/dates)
+        if re.match(r'^[A-Za-z][A-Za-z0-9]*$', potential_var):
+            return potential_var
+    
+    # Pattern 2: Extract from typical scientific variable naming
+    # Look for common variable patterns in geoscience data
+    var_patterns = [
+        r'(?:_|^)(PREC[A-Z]*|TEMP[A-Z]*|WIND[A-Z]*|PRESS[A-Z]*|[A-Z]{2,}[A-Z0-9]*)(?:_|\.tif$)',
+        r'(?:_|^)([A-Z][A-Z0-9_]*[A-Z])(?:_|\.tif$)'
+    ]
+    
+    for pattern in var_patterns:
+        match = re.search(pattern, base_name)
+        if match:
+            return match.group(1)
+    
+    # Fallback: use the last meaningful part of the filename
+    if '_' in base_name:
+        return base_name.split('_')[-1]
+    
+    # Final fallback: return "data" as a generic variable name
+    return "data"
+
+
+def check_collection_exists(mmgis_url, mmgis_token, collection_id):
+    """
+    Check if a STAC collection exists.
+    Returns True if collection exists, False otherwise.
+    """
+    url = f'{mmgis_url}/stac/collections/{collection_id}'
+    
+    try:
+        response = requests.get(url, headers={'Authorization': f'Bearer {mmgis_token}'})
+        return response.status_code == 200
+    except requests.RequestException as e:
+        print(f"Error checking collection existence: {e}")
+        return False
+
+
+def create_stac_collection(mmgis_url, mmgis_token, collection_id, variable_name, description=None):
+    """
+    Create a new STAC collection.
+    """
+    if description is None:
+        description = f"CZDT collection for {collection_id} variable {variable_name}"
+    
+    collection_data = {
+        "id": collection_id,
+        "title": f"{collection_id} - {variable_name}",
+        "description": description,
+        "stac_version": "1.0.0",
+        "license": "proprietary",
+        "extent": {
+            "spatial": {
+                "bbox": [[-180, -90, 180, 90]]  # Global extent as default
+            },
+            "temporal": {
+                "interval": [["1900-01-01T00:00:00Z", None]]  # Open-ended temporal extent
+            }
+        }
+    }
+    
+    url = f'{mmgis_url}/stac/collections'
+    
+    try:
+        response = requests.post(
+            url,
+            json=collection_data,
+            headers={
+                'Authorization': f'Bearer {mmgis_token}',
+                'Content-Type': 'application/json'
+            }
+        )
+        
+        if response.status_code >= 200 and response.status_code < 300:
+            print(f"Successfully created STAC collection: {collection_id}")
+            return True
+        else:
+            print(f"Failed to create collection {collection_id}: {response.status_code} - {response.text}")
+            return False
+            
+    except requests.RequestException as e:
+        print(f"Error creating collection: {e}")
+        return False
+
+
+def ensure_collection_exists(mmgis_url, mmgis_token, collection_id, tif_file_path):
+    """
+    Ensure a STAC collection exists, creating it if necessary.
+    Returns (success: bool, actual_collection_id: str)
+    """
+    # Check if collection exists
+    if check_collection_exists(mmgis_url, mmgis_token, collection_id):
+        print(f"Collection {collection_id} already exists")
+        return True, collection_id
+    
+    # Extract variable name from TIF file
+    variable_name = extract_variable_from_tif_filename(tif_file_path)
+    
+    # Create new collection with variable name appended
+    full_collection_id = f"{collection_id}_{variable_name}"
+    
+    print(f"Creating new collection: {full_collection_id} (original: {collection_id}, variable: {variable_name})")
+    
+    success = create_stac_collection(
+        mmgis_url=mmgis_url,
+        mmgis_token=mmgis_token,
+        collection_id=full_collection_id,
+        variable_name=variable_name,
+        description=f"CZDT ISS collection for {collection_id} processing variable {variable_name}"
+    )
+    
+    return success, full_collection_id
 
 
 def create_stac_items(mmgis_url, mmgis_token, collection_id, file_or_folder_path, path_remove="", path_replace_with="", upsert=False, regex=None, time_from_fn=None, starttime=None, endtime=None):
@@ -50,6 +180,20 @@ def create_stac_items(mmgis_url, mmgis_token, collection_id, file_or_folder_path
         filename, file_extension = os.path.splitext(file_or_folder_path)
         if file_extension.lower() == '.tif':
             files.append(file_or_folder_path)
+
+    # Ensure collection exists before creating items
+    # Use the first file to determine variable name and collection ID
+    if files:
+        first_file = files[0]
+        success, actual_collection_id = ensure_collection_exists(mmgis_url, mmgis_token, collection_id, first_file)
+        if not success:
+            print(f"Failed to create/verify collection for {collection_id}")
+            return []
+        collection_id = actual_collection_id
+        print(f"Using collection ID: {collection_id}")
+    else:
+        print("No TIF files found to process")
+        return []
 
     items = {}
 
