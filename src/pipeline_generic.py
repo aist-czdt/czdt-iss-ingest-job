@@ -481,7 +481,7 @@ def catalog_products(args, maap, cog_jobs):
     
     for i, tif_file in enumerate(tif_files):
         logger.debug(f"Cataloging TIF file {i+1}/{len(tif_files)}: {tif_file}")
-        create_stac_items.create_stac_items(
+        stac_records = create_stac_items.create_stac_items(
             mmgis_url=args.mmgis_host,
             mmgis_token=czdt_token,
             collection_id=args.collection_id,
@@ -492,7 +492,7 @@ def catalog_products(args, maap, cog_jobs):
     
     product_details = {
         "collection": args.collection_id,
-        "ogc": f"{args.mmgis_host}/stac/collections/{args.collection_id}/items",
+        "ogc": stac_records,
         "uris": tif_files,
         "job_id": get_job_id()
     }
