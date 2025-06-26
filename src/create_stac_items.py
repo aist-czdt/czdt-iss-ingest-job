@@ -80,6 +80,7 @@ def create_stac_collection(mmgis_url, mmgis_token, collection_id, variable_name,
     
     collection_data = {
         "id": collection_id,
+        "type": "Collection",
         "title": f"{collection_id} - {variable_name}",
         "description": description,
         "stac_version": "1.0.0",
@@ -91,7 +92,33 @@ def create_stac_collection(mmgis_url, mmgis_token, collection_id, variable_name,
             "temporal": {
                 "interval": [["1900-01-01T00:00:00Z", None]]  # Open-ended temporal extent
             }
-        }
+        },
+        "links": [
+            {
+                "rel": "root",
+                "href": f"{mmgis_url}/stac/",
+                "type": "application/json",
+                "title": "STAC Catalog"
+            },
+            {
+                "rel": "parent",
+                "href": f"{mmgis_url}/stac/",
+                "type": "application/json",
+                "title": "STAC Catalog"
+            },
+            {
+                "rel": "self",
+                "href": f"{mmgis_url}/stac/collections/{collection_id}",
+                "type": "application/json",
+                "title": f"Collection {collection_id}"
+            },
+            {
+                "rel": "items",
+                "href": f"{mmgis_url}/stac/collections/{collection_id}/items",
+                "type": "application/geo+json",
+                "title": "Items"
+            }
+        ]
     }
     
     url = f'{mmgis_url}/stac/collections'
