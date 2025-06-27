@@ -150,7 +150,7 @@ def ensure_collection_exists(mmgis_url, mmgis_token, collection_id, tif_file_pat
     Ensure a STAC collection exists, creating it if necessary.
     Returns (success: bool, actual_collection_id: str)
     """
-    # Check if collection exists
+    # Check if original collection exists
     if check_collection_exists(mmgis_url, mmgis_token, collection_id):
         print(f"Collection {collection_id} already exists")
         return True, collection_id
@@ -160,6 +160,11 @@ def ensure_collection_exists(mmgis_url, mmgis_token, collection_id, tif_file_pat
     
     # Create new collection with variable name appended
     full_collection_id = f"{collection_id}_{variable_name}"
+    
+    # Check if the full collection ID already exists
+    if check_collection_exists(mmgis_url, mmgis_token, full_collection_id):
+        print(f"Collection {full_collection_id} already exists")
+        return True, full_collection_id
     
     print(f"Creating new collection: {full_collection_id} (original: {collection_id}, variable: {variable_name})")
     
