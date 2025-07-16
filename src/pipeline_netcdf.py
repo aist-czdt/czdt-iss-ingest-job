@@ -8,7 +8,6 @@ from botocore.exceptions import ClientError
 from maap.maap import MAAP
 from maap.dps.dps_job import DPSJob
 import asyncio
-from async_job import AsyncJob
 import create_stac_items
 import requests
 from os.path import basename, join
@@ -211,8 +210,7 @@ async def convert_to_zarr(args, maap, input_s3_url):
         raise RuntimeError(f"Failed to submit CZDT_NETCDF_TO_ZARR job: {error_msg}")
     
     # Wait for job completion
-    aj = AsyncJob(job.id)
-    await aj.get_job_status()
+    job.wait_for_completion()
     
     return job
 
@@ -260,8 +258,7 @@ async def convert_to_concatenated_zarr(args, maap, convert_to_zarr_result):
         raise RuntimeError(f"Failed to submit CZDT_ZARR_CONCAT job: {error_msg}")
     
     # Wait for job completion
-    aj = AsyncJob(job.id)
-    await aj.get_job_status()
+    job.wait_for_completion()
     
     return job
 
@@ -299,9 +296,7 @@ async def convert_zarr_to_cog(args, maap, convert_to_concatenated_zarr_result):
         raise RuntimeError("No CZDT_ZARR_TO_COG jobs were successfully submitted")
     
     # Wait for all jobs to complete
-    job_ids = [job.id for job in jobs]
-    tasks = [AsyncJob(job_id).get_job_status() for job_id in job_ids]
-    await asyncio.gather(*tasks)
+    job.wait_for_completion() for job in jobs
     
     return jobs
 

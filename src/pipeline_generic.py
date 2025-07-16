@@ -7,7 +7,6 @@ import json
 from maap.maap import MAAP
 from maap.dps.dps_job import DPSJob
 import asyncio
-from async_job import AsyncJob, JobFailedException
 import create_stac_items
 import requests
 from os.path import basename, join
@@ -266,9 +265,8 @@ async def stage_from_daac(args, maap):
         raise RuntimeError(f"Failed to submit DAAC staging job: {error_msg}")
     
     logger.debug(f"DAAC staging job submitted successfully with ID: {staging_job.id}")
-    aj = AsyncJob(staging_job.id)
     logger.debug("Waiting for DAAC staging job to complete")
-    await aj.get_job_status()
+    staging_job.wait_for_completion()
     logger.debug("DAAC staging job completed")
     return staging_job
 
@@ -338,9 +336,8 @@ async def convert_netcdf_to_zarr(args, maap, input_source):
         raise RuntimeError(f"Failed to submit NetCDF to Zarr job: {error_msg}")
     
     logger.debug(f"NetCDF to Zarr job submitted successfully with ID: {job.id}")
-    aj = AsyncJob(job.id)
     logger.debug("Waiting for NetCDF to Zarr job to complete")
-    await aj.get_job_status()
+    job.wait_for_completion()
     logger.debug("NetCDF to Zarr job completed")
     return job
 
@@ -397,9 +394,8 @@ async def concatenate_zarr(args, maap, zarr_job):
         raise RuntimeError(f"Failed to submit Zarr concatenation job: {error_msg}")
     
     logger.debug(f"Zarr concatenation job submitted successfully with ID: {job.id}")
-    aj = AsyncJob(job.id)
     logger.debug("Waiting for Zarr concatenation job to complete")
-    await aj.get_job_status()
+    job.wait_for_completion()
     logger.debug("Zarr concatenation job completed")
     return job
 
@@ -461,8 +457,7 @@ async def convert_zarr_to_cog(args, maap, zarr_source):
     # Wait for all jobs to complete
     job_ids = [job.id for job in jobs]
     logger.debug(f"Waiting for {len(jobs)} Zarr to COG jobs to complete: {job_ids}")
-    tasks = [AsyncJob(job_id).get_job_status() for job_id in job_ids]
-    await asyncio.gather(*tasks)
+    job.wait_for_completion() for job in jobs
     logger.debug("All Zarr to COG jobs completed")
     
     return jobs
