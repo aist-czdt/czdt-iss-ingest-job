@@ -11,5 +11,6 @@ dependencies:
   - boto3
   - jq
   - pip
+  - backoff
   - pip:
     - maap-py

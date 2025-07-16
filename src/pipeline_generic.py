@@ -7,6 +7,7 @@ import json
 from maap.maap import MAAP
 from maap.dps.dps_job import DPSJob
 import asyncio
+import backoff
 import create_stac_items
 import requests
 from os.path import basename, join
@@ -161,6 +162,14 @@ def job_error_message(job: DPSJob) -> str:
     logger.debug(f"Returning error message: {error_msg}")
     return error_msg
 
+@backoff.on_exception(backoff.expo, Exception, max_value=64, max_time=172800)
+def wait_for_completion(job: DPSJob):
+    job.retrieve_status()
+    if job.status.lower() in ["accepted", "running"]:
+        logger.debug('Current Status is {}. Backing off.'.format(job.status))
+        raise RuntimeError
+    return job
+
 def parse_s3_path(s3_path: str) -> tuple[str, str]:
     """Parse an S3 path into bucket and key components."""
     logger.debug(f"Parsing S3 path: {s3_path}")
@@ -266,7 +275,7 @@ async def stage_from_daac(args, maap):
     
     logger.debug(f"DAAC staging job submitted successfully with ID: {staging_job.id}")
     logger.debug("Waiting for DAAC staging job to complete")
-    c_result = staging_job.wait_for_completion()
+    c_result = wait_for_completion(staging_job)
     logger.debug("DAAC staging job completed")
     return staging_job
 
@@ -337,7 +346,7 @@ async def convert_netcdf_to_zarr(args, maap, input_source):
     
     logger.debug(f"NetCDF to Zarr job submitted successfully with ID: {job.id}")
     logger.debug("Waiting for NetCDF to Zarr job to complete")
-    c_result = job.wait_for_completion()
+    c_result = wait_for_completion(job)
     logger.debug("NetCDF to Zarr job completed")
     return job
 
@@ -395,7 +404,7 @@ async def concatenate_zarr(args, maap, zarr_job):
     
     logger.debug(f"Zarr concatenation job submitted successfully with ID: {job.id}")
     logger.debug("Waiting for Zarr concatenation job to complete")
-    c_result = job.wait_for_completion()
+    c_result = wait_for_completion(job)
     logger.debug("Zarr concatenation job completed")
     return job
 
@@ -458,7 +467,7 @@ async def convert_zarr_to_cog(args, maap, zarr_source):
     job_ids = [job.id for job in jobs]
     logger.debug(f"Waiting for {len(jobs)} Zarr to COG jobs to complete: {job_ids}")
     for job in jobs:
-        c_result = job.wait_for_completion()
+        c_result = wait_for_completion(job)
     logger.debug("All Zarr to COG jobs completed")
     
     return jobs
