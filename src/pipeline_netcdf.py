@@ -8,6 +8,7 @@ from botocore.exceptions import ClientError
 from maap.maap import MAAP
 from maap.dps.dps_job import DPSJob
 import asyncio
+import backoff
 import create_stac_items
 import requests
 from os.path import basename, join
@@ -144,6 +145,14 @@ def get_job_id():
             return job_id
     return ""
 
+@backoff.on_exception(backoff.expo, Exception, max_value=64, max_time=172800)
+def wait_for_completion(job: DPSJob):
+    job.retrieve_status()
+    if job.status.lower() in ["deleted", "accepted", "running"]:
+        logger.debug('Current Status is {}. Backing off.'.format(job.status))
+        raise RuntimeError
+    return job
+
 
 def upload_to_s3(s3_client, local_file_path: str, bucket_name: str, s3_prefix: str):
     """
@@ -209,8 +218,7 @@ async def convert_to_zarr(args, maap, input_s3_url):
         error_msg = job_error_message(job)
         raise RuntimeError(f"Failed to submit CZDT_NETCDF_TO_ZARR job: {error_msg}")
     
-    # Wait for job completion
-    job.wait_for_completion()
+    wait_for_completion(job)
     
     return job
 
@@ -257,8 +265,7 @@ async def convert_to_concatenated_zarr(args, maap, convert_to_zarr_result):
         error_msg = job_error_message(job)
         raise RuntimeError(f"Failed to submit CZDT_ZARR_CONCAT job: {error_msg}")
     
-    # Wait for job completion
-    job.wait_for_completion()
+    wait_for_completion(job)
     
     return job
 
@@ -297,7 +304,7 @@ async def convert_zarr_to_cog(args, maap, convert_to_concatenated_zarr_result):
     
     # Wait for all jobs to complete
     for job in jobs:
-        job.wait_for_completion()
+        wait_for_completion(job)
     
     return jobs
 
