@@ -296,7 +296,8 @@ async def convert_zarr_to_cog(args, maap, convert_to_concatenated_zarr_result):
         raise RuntimeError("No CZDT_ZARR_TO_COG jobs were successfully submitted")
     
     # Wait for all jobs to complete
-    job.wait_for_completion() for job in jobs
+    for job in jobs:
+        job.wait_for_completion()
     
     return jobs
 

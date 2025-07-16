@@ -266,7 +266,7 @@ async def stage_from_daac(args, maap):
     
     logger.debug(f"DAAC staging job submitted successfully with ID: {staging_job.id}")
     logger.debug("Waiting for DAAC staging job to complete")
-    staging_job.wait_for_completion()
+    c_result = staging_job.wait_for_completion()
     logger.debug("DAAC staging job completed")
     return staging_job
 
@@ -337,7 +337,7 @@ async def convert_netcdf_to_zarr(args, maap, input_source):
     
     logger.debug(f"NetCDF to Zarr job submitted successfully with ID: {job.id}")
     logger.debug("Waiting for NetCDF to Zarr job to complete")
-    job.wait_for_completion()
+    c_result = job.wait_for_completion()
     logger.debug("NetCDF to Zarr job completed")
     return job
 
@@ -395,7 +395,7 @@ async def concatenate_zarr(args, maap, zarr_job):
     
     logger.debug(f"Zarr concatenation job submitted successfully with ID: {job.id}")
     logger.debug("Waiting for Zarr concatenation job to complete")
-    job.wait_for_completion()
+    c_result = job.wait_for_completion()
     logger.debug("Zarr concatenation job completed")
     return job
 
@@ -457,7 +457,8 @@ async def convert_zarr_to_cog(args, maap, zarr_source):
     # Wait for all jobs to complete
     job_ids = [job.id for job in jobs]
     logger.debug(f"Waiting for {len(jobs)} Zarr to COG jobs to complete: {job_ids}")
-    job.wait_for_completion() for job in jobs
+    for job in jobs:
+        c_result = job.wait_for_completion()
     logger.debug("All Zarr to COG jobs completed")
     
     return jobs
@@ -553,10 +554,6 @@ async def main():
         logging.info("Generic pipeline completed successfully!")
         logger.debug("All pipeline steps completed without errors")
         
-    except JobFailedException as e:
-        logger.debug(f"JobFailedException caught: {e}")
-        logging.error(f"TERMINATED: Pipeline job failed. Details: {e}")
-        sys.exit(5)
     except ValueError as e:
         logger.debug(f"ValueError caught: {e}")
         logging.error(f"TERMINATED: Invalid argument or value. Details: {e}")
