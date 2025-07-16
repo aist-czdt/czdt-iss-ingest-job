@@ -145,7 +145,7 @@ MAAP Job Submission → _job.json → run_product_ingest.sh → pipeline_generic
 
 ### Error Handling Chain
 ```
-DPS Job Failure → AsyncJob.check_status() → JobFailedException → Pipeline Exit (code 5)
+DPS Job Failure → job.wait_for_completion() → Pipeline Exit (code 5)
 ```
 
 ### Collection Management Flow
