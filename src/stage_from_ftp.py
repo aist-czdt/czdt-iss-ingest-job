@@ -38,8 +38,8 @@ def parse_arguments():
         description="Search for a batch of ftp files, download them, and upload them into an AWS S3 bucket.")
     parser.add_argument("--ftp-server", required=True,
                         help="The ftp server to use for the file downloads (e.g., floodlight.ssec.wisc.edu).")
-    parser.add_argument("--search-keyword", required=True,
-                        help="The keyword to search within the ftp files of interest")
+    parser.add_argument("--area-of-interest", required=True,
+                        help="The area of interest to filter on within the ftp files.")
     parser.add_argument("--s3-bucket", required=True,
                         help="The name of the target S3 bucket for uploading the ftp files.")
     parser.add_argument("--s3-prefix", default="",
@@ -50,6 +50,12 @@ def parse_arguments():
     parser.add_argument("--role-arn",
                         help="Optional AWS IAM Role ARN to assume for S3 upload. "
                              "Useful for cross-account S3 bucket access.")
+    parser.add_argument("--cmss-logger-host", required=True,
+                        help="Host for logging pipeline messages")
+    parser.add_argument("--mmgis-host", required=True,
+                        help="Host for cataloging STAC items")
+    parser.add_argument("--titiler-token-secret-name", required=True,
+                        help="MAAP secret name for MMGIS host token")
     parser.add_argument("--overwrite-existing", default="false",
                         help="If set to true, ftp files will be processed and re-uploaded even if already previously uploaded.")
     return parser.parse_args()
@@ -125,7 +131,6 @@ def search_and_download_ftp_files(
 
     try:
         ftp.login(user="anonymous", passwd="anonymous@domain.com")
-        # TODO: Parameterize
         path = "/composite"
 
         keywords = [search_keyword, "."]
