@@ -99,7 +99,7 @@ def validate_arguments(args):
 def detect_input_type(args):
     """Detect the type of input and processing needed"""
     logger.debug("Detecting input type")
-    if args.granule_id and len(args.granule_id) > 0:
+    if args.granule_id and len(args.granule_id) > 0 and args.granule_id != "none":
         logger.debug(f"Detected DAAC input type for granule: {args.granule_id}")
         return "daac"
     elif args.input_s3:
