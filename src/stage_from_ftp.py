@@ -100,7 +100,7 @@ def list_ftp_files(ftp: ftplib.FTP, path: str, keywords: List[str]) -> List[str]
 
 def search_and_download_ftp_files(
     ftp_server: str, 
-    search_keyword: str, 
+    area_of_interest: str, 
     local_download_dir: str, 
     overwrite_existing: bool,
     s3_client, 
@@ -112,7 +112,7 @@ def search_and_download_ftp_files(
 
     Args:
         ftp_server (str): The ftp server to use for the file downloads.
-        search_keyword (str): The keyword to search within the ftp files of interest.
+        area_of_interest (str): The area of interest to search within the ftp files.
         local_download_dir (str): The directory to download the ftp files into.
         overwrite_existing (bool): Whether to re-upload if already previously uploaded.
         s3_client (boto3.client): The S3 client to use for the upload.
@@ -126,19 +126,19 @@ def search_and_download_ftp_files(
         DownloadError: If any error occurs during the download process.
         ValueError: If the local download path is invalid.
     """
-    logging.info(f"Searching for file files containing '{search_keyword}' in server '{ftp_server}'...")
+    logging.info(f"Searching for file files containing '{area_of_interest}' in server '{ftp_server}'...")
     ftp = ftplib.FTP(ftp_server)
 
     try:
         ftp.login(user="anonymous", passwd="anonymous@domain.com")
         path = "/composite"
 
-        keywords = [search_keyword, "."]
+        keywords = [area_of_interest, "."]
         
         file_results = list_ftp_files(ftp, path, keywords)
 
         if not file_results:
-            raise FtpFileNotFoundError(f"Keyword '{search_keyword}' yielded no results in '{ftp_server}'.")
+            raise FtpFileNotFoundError(f"Keyword '{area_of_interest}' yielded no results in '{ftp_server}'.")
 
         logging.info(f"{len(file_results)} file(s) found.")
 
@@ -174,11 +174,11 @@ def search_and_download_ftp_files(
     except FtpFileNotFoundError:  # Re-raise specific exception
         raise
     except ClientError as e:  # Catch Boto3/AWS related errors if MAAP uses them internally for some S3 access
-        logging.error(f"AWS ClientError during MAAP operation for '{search_keyword}': {e}", exc_info=True)
-        raise DownloadError(f"An AWS ClientError occurred during ftp operations for keyword '{search_keyword}': {e}")
+        logging.error(f"AWS ClientError during MAAP operation for '{area_of_interest}': {e}", exc_info=True)
+        raise DownloadError(f"An AWS ClientError occurred during ftp operations for aoi '{area_of_interest}': {e}")
     except Exception as e:  # Catch other exceptions like requests.exceptions.HTTPError
-        logging.error(f"An error occurred during ftp search or download for keyword '{search_keyword}': {e}", exc_info=True)
-        raise DownloadError(f"Failed to search or download file for keyword '{search_keyword}': {e}")
+        logging.error(f"An error occurred during ftp search or download for aoi '{area_of_interest}': {e}", exc_info=True)
+        raise DownloadError(f"Failed to search or download file for aoi '{area_of_interest}': {e}")
     finally:
         ftp.quit()
 
@@ -349,7 +349,7 @@ def main():
         # Step 2: Search for and download the ftp files
         downloaded_file_paths = search_and_download_ftp_files(
             args.ftp_server,
-            args.search_keyword,
+            args.area_of_interest,
             args.local_download_path,
             _overwrite_existing,
             s3_client,
