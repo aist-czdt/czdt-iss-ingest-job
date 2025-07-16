@@ -99,7 +99,7 @@ if [[ "${enable_concat}" == "true" ]]; then
 fi
 
 # Determine input type and add appropriate arguments
-if [[ -n "${granule_id}" ]]; then
+if [[ -n "${granule_id}" && "${granule_id}" != "none" ]]; then
     # DAAC input
     args+=(--granule-id "${granule_id}")
     if [[ -n "${collection_id}" ]]; then
