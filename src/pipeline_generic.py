@@ -163,8 +163,8 @@ def job_error_message(job: DPSJob) -> str:
     return error_msg
 
 @backoff.on_exception(backoff.expo, Exception, max_value=64, max_time=172800)
-def wait_for_completion(job: DPSJob):
-    job.retrieve_status()
+async def wait_for_completion(job: DPSJob):
+    await asyncio.to_thread(job.retrieve_status)
     if job.status.lower() in ["deleted", "accepted", "running"]:
         logger.debug('Current Status is {}. Backing off.'.format(job.status))
         raise RuntimeError
@@ -275,7 +275,7 @@ async def stage_from_daac(args, maap):
     
     logger.debug(f"DAAC staging job submitted successfully with ID: {staging_job.id}")
     logger.debug("Waiting for DAAC staging job to complete")
-    wait_for_completion(staging_job)
+    await wait_for_completion(staging_job)
     logger.debug("DAAC staging job completed")
     return staging_job
 
@@ -346,7 +346,7 @@ async def convert_netcdf_to_zarr(args, maap, input_source):
     
     logger.debug(f"NetCDF to Zarr job submitted successfully with ID: {job.id}")
     logger.debug("Waiting for NetCDF to Zarr job to complete")
-    wait_for_completion(job)
+    await wait_for_completion(job)
     logger.debug("NetCDF to Zarr job completed")
     return job
 
@@ -404,7 +404,7 @@ async def concatenate_zarr(args, maap, zarr_job):
     
     logger.debug(f"Zarr concatenation job submitted successfully with ID: {job.id}")
     logger.debug("Waiting for Zarr concatenation job to complete")
-    wait_for_completion(job)
+    await wait_for_completion(job)
     logger.debug("Zarr concatenation job completed")
     return job
 
@@ -467,7 +467,7 @@ async def convert_zarr_to_cog(args, maap, zarr_source):
     job_ids = [job.id for job in jobs]
     logger.debug(f"Waiting for {len(jobs)} Zarr to COG jobs to complete: {job_ids}")
     for job in jobs:
-        wait_for_completion(job)
+        await wait_for_completion(job)
     logger.debug("All Zarr to COG jobs completed")
     
     return jobs
