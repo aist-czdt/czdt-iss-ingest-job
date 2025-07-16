@@ -11,6 +11,7 @@ import backoff
 import create_stac_items
 import requests
 from os.path import basename, join
+from datetime import datetime, timezone
 
 # Configure logging: DEBUG for this module, INFO for dependencies
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
@@ -472,7 +473,7 @@ async def convert_zarr_to_cog(args, maap, zarr_source):
     
     return jobs
 
-def catalog_products(args, maap, cog_jobs):
+def catalog_products(args, maap, cog_jobs, zarr_job):
     """Catalog processed products to STAC"""
     logger.debug(f"Starting product cataloging for {len(cog_jobs)} COG jobs")
     tif_files = get_dps_output(cog_jobs, ".tif")
@@ -483,22 +484,36 @@ def catalog_products(args, maap, cog_jobs):
     msg = f"Cataloging {len(tif_files)} COG file(s) to STAC"
     print(msg)
     cmss_logger(args, "INFO", msg)
+
+    utc_now = datetime.now(timezone.utc)
+    # Format as ISO 8601 with 'Z' for UTC
+    formatted_utc_time = utc_now.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    stac_records = []
     
     for i, tif_file in enumerate(tif_files):
         logger.debug(f"Cataloging TIF file {i+1}/{len(tif_files)}: {tif_file}")
-        stac_records = create_stac_items.create_stac_items(
+        stac_record = create_stac_items.create_stac_items(
             mmgis_url=args.mmgis_host,
             mmgis_token=czdt_token,
             collection_id=args.collection_id,
             file_or_folder_path=tif_file,
-            starttime="2025-04-01T18:30:00Z"
+            starttime=formatted_utc_time
         )
+        stac_records.append(stac_record)
         logger.debug(f"STAC item created for: {tif_file}")
+
+    product_uris = tif_files
+
+    if zarr_job is not None:
+        s3_zarr_urls = get_dps_output([zarr_job], ".zarr", True)
+        logger.debug(f"Found {len(s3_zarr_urls)} ZARR files for cataloging: {s3_zarr_urls}")
+        product_uris += s3_zarr_urls
     
     product_details = {
         "collection": args.collection_id,
         "ogc": stac_records,
-        "uris": tif_files,
+        "uris": product_uris,
         "job_id": get_job_id()
     }
     logger.debug(f"Product details for notification: {product_details}")
@@ -535,7 +550,7 @@ async def main():
                 logger.debug("Concatenation disabled, skipping concatenation step")
             
             cog_jobs = await convert_zarr_to_cog(args, maap, zarr_job)
-            catalog_products(args, maap, cog_jobs)
+            catalog_products(args, maap, cog_jobs, zarr_job)
             logger.debug("DAAC pipeline completed successfully")
             
         elif input_type == "s3_netcdf":
@@ -550,14 +565,14 @@ async def main():
                 logger.debug("Concatenation disabled, skipping concatenation step")
             
             cog_jobs = await convert_zarr_to_cog(args, maap, zarr_job)
-            catalog_products(args, maap, cog_jobs)
+            catalog_products(args, maap, cog_jobs, zarr_job)
             logger.debug("S3 NetCDF pipeline completed successfully")
             
         elif input_type == "s3_zarr":
             # S3 Zarr → COG → Catalog (skip NetCDF conversion and concat)
             logger.debug("Starting S3 Zarr pipeline: zarr2cog → catalog")
             cog_jobs = await convert_zarr_to_cog(args, maap, args.input_s3)
-            catalog_products(args, maap, cog_jobs)
+            catalog_products(args, maap, cog_jobs, None)
             logger.debug("S3 Zarr pipeline completed successfully")
         
         logging.info("Generic pipeline completed successfully!")
