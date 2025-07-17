@@ -343,7 +343,7 @@ async def main():
                 logger.debug("Concatenation disabled, skipping concatenation step")
             
             cog_jobs = await convert_zarr_to_cog(args, maap, zarr_job)
-            catalog_products(args, maap, cog_jobs)
+            catalog_products(args, maap, cog_jobs, zarr_job)
             logger.debug("DAAC pipeline completed successfully")
             
         elif input_type == "s3_netcdf":
@@ -358,14 +358,14 @@ async def main():
                 logger.debug("Concatenation disabled, skipping concatenation step")
             
             cog_jobs = await convert_zarr_to_cog(args, maap, zarr_job)
-            catalog_products(args, maap, cog_jobs)
+            catalog_products(args, maap, cog_jobs, zarr_job)
             logger.debug("S3 NetCDF pipeline completed successfully")
             
         elif input_type == "s3_zarr":
             # S3 Zarr → COG → Catalog (skip NetCDF conversion and concat)
             logger.debug("Starting S3 Zarr pipeline: zarr2cog → catalog")
             cog_jobs = await convert_zarr_to_cog(args, maap, args.input_s3)
-            catalog_products(args, maap, cog_jobs)
+            catalog_products(args, maap, cog_jobs, None)
             logger.debug("S3 Zarr pipeline completed successfully")
         
         logging.info("Generic pipeline completed successfully!")
