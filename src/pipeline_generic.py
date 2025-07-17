@@ -500,7 +500,7 @@ def catalog_products(args, maap, cog_jobs, zarr_job):
             file_or_folder_path=tif_file,
             starttime=formatted_utc_time
         )
-        stac_records.append(stac_record)
+        stac_records += stac_record
         logger.debug(f"STAC item created for: {tif_file}")
 
     product_uris = tif_files
