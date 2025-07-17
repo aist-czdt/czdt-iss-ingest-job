@@ -4,164 +4,32 @@ import sys
 import logging
 import boto3
 import json
+import backoff
 from maap.maap import MAAP
 from maap.dps.dps_job import DPSJob
 import asyncio
-import backoff
 import create_stac_items
 import requests
 from os.path import basename, join
 from datetime import datetime, timezone
+from common_utils import (
+    MaapUtils, LoggingUtils, ConfigUtils
+)
 
 # Configure logging: DEBUG for this module, INFO for dependencies
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-class UploadError(Exception):
-    """Custom exception for errors encountered during S3 upload."""
-    pass
-
-class GranuleNotFoundError(Exception):
-    """Custom exception for when a granule is not found via MAAP search."""
-    pass
-
-class DownloadError(Exception):
-    """Custom exception for errors encountered during granule download."""
-    pass
-
 def parse_arguments():
     """
     Defines and parses command-line arguments for the generic pipeline script.
     """
     logger.debug("Starting argument parsing")
-    parser = argparse.ArgumentParser(
-        description="Generic CZDT pipeline that processes data from DAAC, S3 NetCDF, or S3 Zarr inputs.")
-    
-    # Input source options (mutually exclusive)
-    input_group = parser.add_mutually_exclusive_group(required=True)
-    input_group.add_argument("--granule-id", 
-                           help="DAAC Granule ID for download from DAAC archives")
-    input_group.add_argument("--input-s3", 
-                           help="S3 URL of input file (NetCDF or Zarr)")
-    
-    # Required for DAAC input
-    parser.add_argument("--collection-id", 
-                        help="Collection Concept ID (required for DAAC input)")
-    
-    # Common required arguments
-    parser.add_argument("--s3-bucket", required=True,
-                        help="Target S3 bucket for uploading processed files")
-    parser.add_argument("--s3-prefix", default="",
-                        help="Optional S3 prefix (folder path) within the bucket")
-    parser.add_argument("--role-arn", required=True,
-                        help="AWS IAM Role ARN to assume for S3 upload")
-    parser.add_argument("--cmss-logger-host", required=True,
-                        help="Host for logging pipeline messages")
-    parser.add_argument("--mmgis-host", required=True,
-                        help="Host for cataloging STAC items")
-    parser.add_argument("--titiler-token-secret-name", required=True,
-                        help="MAAP secret name for MMGIS host token")
-    parser.add_argument("--job-queue", required=True,
-                        help="Queue name for running pipeline jobs")
-    parser.add_argument("--zarr-config-url", required=True,
-                        help="S3 URL of the ZARR config file")
-    
-    # Optional processing parameters
-    parser.add_argument("--variables", default="*",
-                        help="Variables to extract from NetCDF (default: all variables '*')")
-    parser.add_argument("--enable-concat", action="store_true",
-                        help="Enable Zarr concatenation step (default: skip)")
-    parser.add_argument("--local-download-path", default="output",
-                        help="Local directory for temporary downloads")
-    parser.add_argument("--maap-host", default="api.maap-project.org",
-                        help="MAAP API host")
-    
+    parser = ConfigUtils.get_generic_argument_parser()
     args = parser.parse_args()
     logger.debug(f"Parsed arguments: {vars(args)}")
     return args
-
-def validate_arguments(args):
-    """Validate argument combinations"""
-    logger.debug("Starting argument validation")
-    if args.granule_id and not args.collection_id:
-        logger.debug("Validation failed: collection-id required for granule-id")
-        raise ValueError("--collection-id is required when using --granule-id")
-    
-    if args.input_s3:
-        logger.debug(f"Validating S3 URL: {args.input_s3}")
-        if not args.input_s3.startswith('s3://'):
-            logger.debug(f"Validation failed: Invalid S3 URL format: {args.input_s3}")
-            raise ValueError(f"Invalid S3 URL: {args.input_s3}")
-    
-    logger.debug("Argument validation completed successfully")
-
-def detect_input_type(args):
-    """Detect the type of input and processing needed"""
-    logger.debug("Detecting input type")
-    if args.granule_id and len(args.granule_id) > 0 and args.granule_id != "none":
-        logger.debug(f"Detected DAAC input type for granule: {args.granule_id}")
-        return "daac"
-    elif args.input_s3:
-        logger.debug(f"Analyzing S3 input URL: {args.input_s3}")
-        if args.input_s3.endswith(('.nc', '.nc4')):
-            logger.debug("Detected S3 NetCDF input type")
-            return "s3_netcdf"
-        elif args.input_s3.endswith('.zarr') or args.input_s3.endswith('.zarr/'):
-            logger.debug("Detected S3 Zarr input type")
-            return "s3_zarr"
-        else:
-            logger.debug(f"Unsupported file type detected: {args.input_s3}")
-            raise ValueError(f"Unsupported file type in S3 URL: {args.input_s3}")
-    
-    logger.debug("No valid input type could be determined")
-
-def get_maap_instance(maap_host_url: str) -> MAAP:
-    """Initialize and return a MAAP client instance."""
-    logger.debug(f"Starting MAAP client initialization for host: {maap_host_url}")
-    try:
-        logging.info(f"Initializing MAAP client for host: {maap_host_url}")
-        maap_client = MAAP(maap_host=maap_host_url)
-        logging.info("MAAP client initialized successfully.")
-        logger.debug("MAAP client object created and ready for use")
-        return maap_client
-    except Exception as e:
-        logger.debug(f"Exception during MAAP initialization: {type(e).__name__}: {e}")
-        logging.error(f"Failed to initialize MAAP instance for host '{maap_host_url}': {e}", exc_info=True)
-        raise RuntimeError(f"Could not initialize MAAP instance: {e}")
-
-# Helper functions
-def cmss_logger(args, level, msg):
-    logger.debug(f"Sending CMSS log message: level={level}, msg={msg}")
-    endpoint = "log"
-    url = f"{args.cmss_logger_host}/{endpoint}"
-    body = {"level": level, "msg_body": str(msg)}
-    logger.debug(f"CMSS logger URL: {url}, body: {body}")
-    response = requests.post(url, json=body)
-    logger.debug(f"CMSS logger response status: {response.status_code}")
-
-def cmss_product_available(args, details):
-    logger.debug(f"Sending CMSS product availability notification: {details}")
-    endpoint = "product"
-    url = f"{args.cmss_logger_host}/{endpoint}"
-    logger.debug(f"CMSS product URL: {url}")
-    response = requests.post(url, json=details)
-    logger.debug(f"CMSS product response status: {response.status_code}")
-
-def job_error_message(job: DPSJob) -> str:
-    logger.debug(f"Extracting error message from job: {job.id if hasattr(job, 'id') else 'unknown'}")
-    if isinstance(job.error_details, str):
-        logger.debug(f"Job error details (string): {job.error_details}")
-        try:
-            parsed_error = json.loads(job.error_details)["message"]
-            logger.debug(f"Parsed error message: {parsed_error}")
-            return parsed_error
-        except (json.JSONDecodeError, KeyError) as e:
-            logger.debug(f"Failed to parse error details as JSON: {e}")
-            return job.error_details
-    error_msg = job.response_code or "Unknown error"
-    logger.debug(f"Returning error message: {error_msg}")
-    return error_msg
 
 @backoff.on_exception(backoff.expo, Exception, max_value=64, max_time=172800)
 async def wait_for_completion(job: DPSJob):
@@ -171,89 +39,13 @@ async def wait_for_completion(job: DPSJob):
         raise RuntimeError
     return job
 
-def parse_s3_path(s3_path: str) -> tuple[str, str]:
-    """Parse an S3 path into bucket and key components."""
-    logger.debug(f"Parsing S3 path: {s3_path}")
-    if not s3_path.startswith("s3://"):
-        logger.debug(f"Invalid S3 path format: {s3_path}")
-        raise ValueError(f"{s3_path} is not a valid s3 path")
-    
-    path_without_prefix = s3_path[5:]
-    logger.debug(f"Path without s3:// prefix: {path_without_prefix}")
-    
-    # Handle both formats: s3://bucket/key and s3://hostname:port/bucket/key
-    if path_without_prefix.startswith(('s3-', 's3.')):
-        # Format: s3://s3-region.amazonaws.com:port/bucket/key
-        logger.debug("Detected hostname format S3 path")
-        if '/' not in path_without_prefix:
-            logger.debug("No bucket/key found in hostname format")
-            raise ValueError(f"Invalid S3 path format: {s3_path}")
-        
-        # Split at first slash after hostname
-        hostname_part, remaining_path = path_without_prefix.split('/', 1)
-        logger.debug(f"Hostname part: {hostname_part}, remaining path: {remaining_path}")
-        
-        if '/' not in remaining_path:
-            # Only bucket, no key
-            logger.debug(f"No key found, returning bucket only: {remaining_path}")
-            return remaining_path, ""
-        
-        bucket, key = remaining_path.split('/', 1)
-        logger.debug(f"Parsed S3 path (hostname format) - bucket: {bucket}, key: {key}")
-        return bucket, key
-    else:
-        # Standard format: s3://bucket/key
-        logger.debug("Detected standard format S3 path")
-        if '/' not in path_without_prefix:
-            logger.debug(f"No key found, returning bucket only: {path_without_prefix}")
-            return path_without_prefix, ""
-        
-        bucket, key = path_without_prefix.split('/', 1)
-        logger.debug(f"Parsed S3 path (standard format) - bucket: {bucket}, key: {key}")
-        return bucket, key
-
-def get_dps_output(jobs: list[DPSJob], file_ext: str, prefixes_only: bool = False) -> list[str]:
-    logger.debug(f"Getting DPS output for {len(jobs)} jobs, file extension: {file_ext}, prefixes_only: {prefixes_only}")
-    s3 = boto3.resource('s3')
-    output = set()
-    job_outputs = [next((path for path in j.retrieve_result() if path.startswith("s3")), None) for j in jobs]
-    logger.debug(f"Job outputs: {job_outputs}")
-    
-    for job_output in job_outputs:
-        if job_output is None:
-            continue
-        bucket_name, path = parse_s3_path(job_output)
-        dps_bucket = s3.Bucket(bucket_name)
-        for obj in dps_bucket.objects.filter(Prefix=path):
-            if prefixes_only:
-                folder_prefix = os.path.dirname(obj.key)
-                if folder_prefix.endswith(file_ext):
-                    output.add(f"s3://{bucket_name}/{folder_prefix}")
-            else:
-                if obj.key.endswith(file_ext):
-                    output.add(f"s3://{bucket_name}/{obj.key}")
-
-    return list(output)
-
-def get_job_id():
-    logger.debug("Attempting to retrieve job ID from _job.json")
-    if os.path.exists("_job.json"):
-        logger.debug("_job.json file found, reading job info")
-        with open("_job.json", 'r') as fr:
-            job_info = json.load(fr)
-            job_id = job_info.get("job_id", "")
-            logger.debug(f"Retrieved job ID: {job_id}")
-            return job_id
-    logger.debug("_job.json file not found, returning empty job ID")
-    return ""
-
 # DAAC processing functions
 async def stage_from_daac(args, maap):
     """Stage granule from DAAC"""
     logger.debug(f"Starting DAAC staging for granule: {args.granule_id}")
     msg = f"Staging granule {args.granule_id} from DAAC"
     print(msg)
-    cmss_logger(args, "INFO", msg)
+    LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host)
     
     job_params = {
         "identifier": f"Generic-Pipeline_stage_{args.granule_id[-10:]}",
@@ -270,7 +62,7 @@ async def stage_from_daac(args, maap):
     staging_job = maap.submitJob(**job_params)
     
     if not staging_job.id:
-        error_msg = job_error_message(staging_job)
+        error_msg =  MaapUtils.job_error_message(staging_job)
         logger.debug(f"DAAC staging job submission failed: {error_msg}")
         raise RuntimeError(f"Failed to submit DAAC staging job: {error_msg}")
     
@@ -291,10 +83,11 @@ async def convert_netcdf_to_zarr(args, maap, input_source):
         logger.debug(f"Using S3 URL: {input_s3_url}, identifier suffix: {identifier_suffix}")
     else:  # DPS Job result
         logger.debug("Input source is DPS Job result, searching for NetCDF files")
-        nc_files = get_dps_output([input_source], ".nc4")
+        nc_files = MaapUtils.get_dps_output([input_source], ".nc4")
+
         if not nc_files:
             logger.debug("No .nc4 files found, searching for .nc files")
-            nc_files = get_dps_output([input_source], ".nc")
+            nc_files = MaapUtils.get_dps_output([input_source], ".nc")
         if not nc_files:
             logger.debug("No NetCDF files found in staging job output")
             raise RuntimeError("No NetCDF files found in staging job output")
@@ -304,7 +97,7 @@ async def convert_netcdf_to_zarr(args, maap, input_source):
     
     msg = f"Converting NetCDF to Zarr: {input_s3_url}"
     print(msg)
-    cmss_logger(args, "INFO", msg)
+    LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host)
     
     # Determine file pattern
     filename = os.path.basename(input_s3_url)
@@ -341,7 +134,7 @@ async def convert_netcdf_to_zarr(args, maap, input_source):
     job = maap.submitJob(**job_params)
     
     if not job.id:
-        error_msg = job_error_message(job)
+        error_msg = MaapUtils.job_error_message(job)
         logger.debug(f"NetCDF to Zarr job submission failed: {error_msg}")
         raise RuntimeError(f"Failed to submit NetCDF to Zarr job: {error_msg}")
     
@@ -356,12 +149,12 @@ async def concatenate_zarr(args, maap, zarr_job):
     logger.debug(f"Starting Zarr concatenation for job: {zarr_job.id}")
     msg = f"Concatenating Zarr files from job {zarr_job.id}"
     print(msg)
-    cmss_logger(args, "INFO", msg)
+    LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host)
     
     maap_username = maap.profile.account_info()['username']
     logger.debug(f"MAAP username: {maap_username}")
     s3_client = boto3.client('s3')
-    s3_zarr_urls = get_dps_output([zarr_job], ".zarr", True)
+    s3_zarr_urls = MaapUtils.get_dps_output([zarr_job], ".zarr", True)
     logger.debug(f"Found Zarr URLs for concatenation: {s3_zarr_urls}")
     
     # Create manifest
@@ -399,7 +192,7 @@ async def concatenate_zarr(args, maap, zarr_job):
     job = maap.submitJob(**job_params)
     
     if not job.id:
-        error_msg = job_error_message(job)
+        error_msg = MaapUtils.job_error_message(job)
         logger.debug(f"Zarr concatenation job submission failed: {error_msg}")
         raise RuntimeError(f"Failed to submit Zarr concatenation job: {error_msg}")
     
@@ -419,7 +212,7 @@ async def convert_zarr_to_cog(args, maap, zarr_source):
         logger.debug(f"Using S3 Zarr URL: {zarr_files[0]}, identifier suffix: {identifier_suffix}")
     else:  # DPS Job result
         logger.debug("Zarr source is DPS Job result, searching for Zarr files")
-        zarr_files = get_dps_output([zarr_source], ".zarr", True)
+        zarr_files = MaapUtils.get_dps_output([zarr_source], ".zarr", True)
         identifier_suffix = zarr_source.id[-7:]
         logger.debug(f"Found Zarr files: {zarr_files}, identifier suffix: {identifier_suffix}")
     
@@ -429,7 +222,7 @@ async def convert_zarr_to_cog(args, maap, zarr_source):
     
     msg = f"Converting {len(zarr_files)} Zarr file(s) to COG"
     print(msg)
-    cmss_logger(args, "INFO", msg)
+    LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host)
     logger.debug(f"Processing {len(zarr_files)} Zarr files: {zarr_files}")
     
     jobs = []
@@ -456,7 +249,7 @@ async def convert_zarr_to_cog(args, maap, zarr_source):
             logger.debug(f"Zarr to COG job submitted successfully with ID: {job.id}")
             jobs.append(job)
         else:
-            error_msg = job_error_message(job)
+            error_msg = MaapUtils.job_error_message(job)
             logger.debug(f"Failed to submit Zarr to COG job: {error_msg}")
             print(f"Failed to submit Zarr to COG job: {error_msg}", file=sys.stderr)
     
@@ -476,14 +269,14 @@ async def convert_zarr_to_cog(args, maap, zarr_source):
 def catalog_products(args, maap, cog_jobs, zarr_job):
     """Catalog processed products to STAC"""
     logger.debug(f"Starting product cataloging for {len(cog_jobs)} COG jobs")
-    tif_files = get_dps_output(cog_jobs, ".tif")
+    tif_files = MaapUtils.get_dps_output(cog_jobs, ".tif")
     logger.debug(f"Found {len(tif_files)} TIF files for cataloging: {tif_files}")
     czdt_token = maap.secrets.get_secret(args.titiler_token_secret_name)
     logger.debug(f"Retrieved CZDT token from secret: {args.titiler_token_secret_name}")
     
     msg = f"Cataloging {len(tif_files)} COG file(s) to STAC"
     print(msg)
-    cmss_logger(args, "INFO", msg)
+    LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host)
 
     utc_now = datetime.now(timezone.utc)
     # Format as ISO 8601 with 'Z' for UTC
@@ -506,7 +299,7 @@ def catalog_products(args, maap, cog_jobs, zarr_job):
     product_uris = tif_files
 
     if zarr_job is not None:
-        s3_zarr_urls = get_dps_output([zarr_job], ".zarr", True)
+        s3_zarr_urls = MaapUtils.get_dps_output([zarr_job], ".zarr", True)
         logger.debug(f"Found {len(s3_zarr_urls)} ZARR files for cataloging: {s3_zarr_urls}")
         product_uris += s3_zarr_urls
     
@@ -514,11 +307,11 @@ def catalog_products(args, maap, cog_jobs, zarr_job):
         "collection": args.collection_id,
         "ogc": stac_records,
         "uris": product_uris,
-        "job_id": get_job_id()
+        "job_id": MaapUtils.get_job_id()
     }
     logger.debug(f"Product details for notification: {product_details}")
-    cmss_product_available(args, product_details)
-    cmss_logger(args, "INFO", f"Product available for collection {args.collection_id}")
+    LoggingUtils.cmss_product_available(product_details, args.cmss_logger_host)
+    LoggingUtils.cmss_logger(f"Product available for collection {args.collection_id}", args.cmss_logger_host)
     logger.debug("Product cataloging completed successfully")
 
 async def main():
@@ -527,13 +320,13 @@ async def main():
     args = parse_arguments()
     
     try:
-        validate_arguments(args)
-        input_type = detect_input_type(args)
+        ConfigUtils.validate_arguments(args)
+        input_type = ConfigUtils.detect_input_type(args)
         logger.debug(f"Detected input type: {input_type}")
         
         maap_host_to_use = os.environ.get('MAAP_API_HOST', args.maap_host)
         logger.debug(f"Using MAAP host: {maap_host_to_use}")
-        maap = get_maap_instance(maap_host_to_use)
+        maap = MaapUtils.get_maap_instance(maap_host_to_use)
         
         logging.info(f"Processing {input_type} input")
         
@@ -550,7 +343,7 @@ async def main():
                 logger.debug("Concatenation disabled, skipping concatenation step")
             
             cog_jobs = await convert_zarr_to_cog(args, maap, zarr_job)
-            catalog_products(args, maap, cog_jobs, zarr_job)
+            catalog_products(args, maap, cog_jobs)
             logger.debug("DAAC pipeline completed successfully")
             
         elif input_type == "s3_netcdf":
@@ -565,14 +358,14 @@ async def main():
                 logger.debug("Concatenation disabled, skipping concatenation step")
             
             cog_jobs = await convert_zarr_to_cog(args, maap, zarr_job)
-            catalog_products(args, maap, cog_jobs, zarr_job)
+            catalog_products(args, maap, cog_jobs)
             logger.debug("S3 NetCDF pipeline completed successfully")
             
         elif input_type == "s3_zarr":
             # S3 Zarr → COG → Catalog (skip NetCDF conversion and concat)
             logger.debug("Starting S3 Zarr pipeline: zarr2cog → catalog")
             cog_jobs = await convert_zarr_to_cog(args, maap, args.input_s3)
-            catalog_products(args, maap, cog_jobs, None)
+            catalog_products(args, maap, cog_jobs)
             logger.debug("S3 Zarr pipeline completed successfully")
         
         logging.info("Generic pipeline completed successfully!")
