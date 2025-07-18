@@ -13,7 +13,7 @@ import requests
 from os.path import basename, join
 from datetime import datetime, timezone
 from common_utils import (
-    MaapUtils, LoggingUtils, ConfigUtils
+    MaapUtils, LoggingUtils, ConfigUtils, AWSUtils
 )
 
 # Configure logging: DEBUG for this module, INFO for dependencies
@@ -142,6 +142,30 @@ async def convert_netcdf_to_zarr(args, maap, input_source):
     logger.debug("Waiting for NetCDF to Zarr job to complete")
     await wait_for_completion(job)
     logger.debug("NetCDF to Zarr job completed")
+
+    s3_zarr_urls = MaapUtils.get_dps_output([job], ".zarr", True)
+    logger.debug(f"Uploading zarr file directories to S3: {s3_zarr_urls}")
+    aws_region_for_s3 = os.environ.get('AWS_REGION', 'us-west-2')
+    s3_client = AWSUtils.get_s3_client(role_arn=args.role_arn, aws_region=aws_region_for_s3)
+
+    for s3_zarr_url in s3_zarr_urls:
+        src_bucket_name, src_path = AWSUtils.parse_s3_path(s3_zarr_url)
+        dst_bucket_name = args.s3_bucket
+        dst_path = f"{args.s3_prefix}/{args.collection_id}/"
+
+        AWSUtils.copy_s3_folder(src_bucket_name, f"{src_path}/", dst_bucket_name, dst_path, s3_client)
+    
+    if s3_zarr_urls:        
+        product_details = {
+            "collection": args.collection_id,
+            "ogc": [],
+            "uris": s3_zarr_urls,
+            "job_id": MaapUtils.get_job_id()
+        }
+        logger.debug(f"Product details for notification: {product_details}")
+        LoggingUtils.cmss_product_available(product_details, args.cmss_logger_host)
+        LoggingUtils.cmss_logger(f"Product available for collection {args.collection_id}", args.cmss_logger_host)
+
     return job
 
 async def concatenate_zarr(args, maap, zarr_job):

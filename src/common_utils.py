@@ -128,6 +128,53 @@ class AWSUtils:
         except Exception as e:
             logging.error(f"Failed to upload {file_path} to s3://{bucket}/{key}: {e}")
             raise
+
+    @staticmethod
+    def copy_s3_folder(source_bucket, source_prefix, destination_bucket, destination_prefix, s3_client=None, role_arn: str = None):
+        """
+        Copies all objects within a specified "folder" (key prefix) from one S3 bucket to another.
+
+        Args:
+            source_bucket (str): The name of the source S3 bucket.
+            source_prefix (str): The key prefix of the "folder" to copy (e.g., "myfolder/").
+            destination_bucket (str): The name of the destination S3 bucket.
+            destination_prefix (str): The desired key prefix for the copied objects in the destination bucket (e.g., "newfolder/").
+            s3_client: Optional existing S3 client
+            role_arn: Optional role ARN for authentication
+        """
+        
+        if not s3_client:
+            s3_client = AWSUtils.get_s3_client(role_arn=role_arn)
+
+        # List objects in the source "folder"
+        objects_to_copy = []
+        paginator = s3_client.get_paginator('list_objects_v2')
+        pages = paginator.paginate(Bucket=source_bucket, Prefix=source_prefix)
+
+        for page in pages:
+            if 'Contents' in page:
+                for obj in page['Contents']:
+                    objects_to_copy.append(obj['Key'])
+
+        # Copy each object individually
+        for object_key in objects_to_copy:
+            # Construct the new key for the destination bucket
+            new_object_key = object_key.replace(source_prefix, destination_prefix, 1)
+
+            copy_source = {
+                'Bucket': source_bucket,
+                'Key': object_key
+            }
+
+            try:
+                s3_client.copy_object(
+                    CopySource=copy_source,
+                    Bucket=destination_bucket,
+                    Key=new_object_key
+                )
+                logging.info(f"Successfully copied: {object_key} to {destination_bucket}/{new_object_key}")
+            except Exception as e:
+                logging.error(f"Error copying {source_bucket}/{object_key} to {destination_bucket}/{new_object_key}: {e}")
     
     @staticmethod
     def file_exists_in_s3(bucket: str, key: str, s3_client=None) -> bool:
