@@ -380,10 +380,10 @@ class LoggingUtils:
             if response.status_code == 200:
                 logging.debug("Successfully sent log to CMSS")
             else:
-                logging.debug(f"CMSS logging failed with status {response.status_code}")
+                logging.warning(f"CMSS logging failed with status {response.status_code}")
                 
         except Exception as e:
-            logging.debug(f"Failed to send log to CMSS: {e}")
+            logging.warning(f"Failed to send log to CMSS: {e}")
     
     @staticmethod
     def cmss_product_available(product_info: Dict[str, Any], host: str, token: str = None) -> None:
