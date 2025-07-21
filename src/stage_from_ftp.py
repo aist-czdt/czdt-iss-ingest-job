@@ -2,10 +2,12 @@ import argparse
 import os
 import sys
 import logging
-import boto3
 import ftplib 
 from typing import List
 from botocore.exceptions import ClientError
+from common_utils import (
+    AWSUtils, UploadError, DownloadError
+)
 
 # Configure basic logging to provide feedback on the script's progress and any errors.
 # The logging level can be adjusted (e.g., to logging.DEBUG for more verbose output).
@@ -159,7 +161,7 @@ def search_and_download_ftp_files(
         for filename in file_results: 
             if not overwrite_existing:
                 s3_key = get_s3_key(s3_prefix, ftp_server, filename)
-                file_exists = s3_file_exists(s3_client, bucket_name, s3_key)
+                file_exists = AWSUtils.file_exists_in_s3(bucket_name, s3_key, s3_client)
 
                 if file_exists:
                     logging.info(f"Previous upload found for {filename}. Skipping.")
@@ -183,51 +185,6 @@ def search_and_download_ftp_files(
         ftp.quit()
 
 
-# --- AWS S3 Operations ---
-def get_s3_client(role_arn: str = None, aws_region: str = None):
-    """
-    Creates and returns a Boto3 S3 client. If a role_arn is provided,
-    it attempts to assume this role.
-
-    Args:
-        role_arn (str, optional): The ARN of the IAM role to assume. Defaults to None.
-        aws_region (str, optional): The AWS region for the STS and S3 clients.
-                                   If None, uses the default region from AWS config.
-
-    Returns:
-        boto3.client: An S3 client instance.
-
-    Raises:
-        UploadError: If role assumption fails.
-    """
-    if role_arn:
-        try:
-            logging.info(f"Attempting to assume IAM role: {role_arn}")
-            sts_client = boto3.client('sts', region_name=aws_region)
-            # Define a unique session name for the assumed role session
-            role_session_name = f"MAAPGranuleUpload-{os.getpid()}"
-            assumed_role_object = sts_client.assume_role(
-                RoleArn=role_arn,
-                RoleSessionName=role_session_name
-            )
-            credentials = assumed_role_object['Credentials']
-            s3_client = boto3.client(
-                's3',
-                aws_access_key_id=credentials['AccessKeyId'],
-                aws_secret_access_key=credentials['SecretAccessKey'],
-                aws_session_token=credentials['SessionToken'],
-                region_name=aws_region  # Pass region to S3 client as well
-            )
-            logging.info(f"Successfully assumed role '{role_arn}' and created S3 client.")
-            return s3_client
-        except ClientError as e:
-            logging.error(f"Failed to assume AWS role '{role_arn}': {e}", exc_info=True)
-            raise UploadError(f"AWS role assumption failed for {role_arn}: {e}")
-    else:
-        logging.info("Using default AWS credentials to create S3 client.")
-        return boto3.client('s3', region_name=aws_region)
-
-
 def upload_to_s3(s3_client, local_file_paths: List[str], bucket_name: str, s3_prefix: str, ftp_server: str):
     """
     Uploads the specified local files to an S3 bucket. The files are placed under a
@@ -246,16 +203,11 @@ def upload_to_s3(s3_client, local_file_paths: List[str], bucket_name: str, s3_pr
     """
 
     for local_file_path in local_file_paths:
-        if not os.path.exists(local_file_path):
-            raise FileNotFoundError(f"Local file '{local_file_path}' intended for upload does not exist.")
-
         file_name = os.path.basename(local_file_path)
         s3_key = get_s3_key(s3_prefix, ftp_server, file_name)
 
-        logging.info(f"Starting upload of '{local_file_path}' to S3 bucket '{bucket_name}' with key '{s3_key}'.")
-
         try:
-            s3_client.upload_file(local_file_path, bucket_name, s3_key)
+            AWSUtils.upload_to_s3(local_file_path, bucket_name, s3_key, s3_client)
             logging.info(f"Successfully uploaded '{file_name}' to 's3://{bucket_name}/{s3_key}'.")
         except ClientError as e:
             logging.error(f"Failed to upload '{local_file_path}' to S3 (s3://{bucket_name}/{s3_key}): {e}", exc_info=True)
@@ -285,22 +237,6 @@ def get_s3_key(s3_prefix: str, ftp_server: str, file_name: str):
     s3_key = "/".join(part for part in s3_key_parts if part)
 
     return s3_key
-
-
-def s3_file_exists(s3_client, bucket_name: str, key: str):
-    """
-    Checks if an s3 file exists.
-
-    Args:
-        s3_client (boto3.client): The S3 client to use for the upload.
-        bucket_name (str): The name of the S3 bucket.
-        key: The s3 file key.
-    """  
-    try:
-        s3_client.head_object(Bucket=bucket_name, Key=key)
-        return True
-    except:
-        return False
 
 
 # --- File Cleanup ---
@@ -342,7 +278,7 @@ def main():
         # Step 1: Get S3 client (with optional role assumption)
         # Determine AWS region (can be None to use default configured for boto3)
         aws_region_for_s3 = os.environ.get('AWS_REGION', 'us-west-2')  # Or get from args if you add it
-        s3_client = get_s3_client(role_arn=args.role_arn, aws_region=aws_region_for_s3)
+        s3_client = AWSUtils.get_s3_client(role_arn=args.role_arn, aws_region=aws_region_for_s3) 
 
         _overwrite_existing = args.overwrite_existing.casefold() == true.casefold()
 

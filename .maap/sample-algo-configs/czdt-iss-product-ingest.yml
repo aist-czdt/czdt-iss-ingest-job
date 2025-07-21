@@ -45,10 +45,6 @@ inputs:
     name: titiler_token_secret_name 
     required: true
   - default: none
-    description: Queue name for running pipeline jobs
-    name: job_queue 
-    required: true
-  - default: none
     description: S3 URL of the ZARR config file
     name: zarr_config_url 
     required: true
