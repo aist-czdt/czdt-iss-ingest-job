@@ -321,11 +321,6 @@ def catalog_products(args, maap, cog_jobs, zarr_job):
         logger.debug(f"STAC item : {stac_record}")
 
     product_uris = tif_files
-
-    if zarr_job is not None:
-        s3_zarr_urls = MaapUtils.get_dps_output([zarr_job], ".zarr", True)
-        logger.debug(f"Found {len(s3_zarr_urls)} ZARR files for cataloging: {s3_zarr_urls}")
-        product_uris += s3_zarr_urls
     
     product_details = {
         "collection": args.collection_id,
