@@ -370,30 +370,20 @@ class LoggingUtils:
             return
         
         try:
-            headers = {'Content-Type': 'application/json'}
-            if token:
-                headers['Authorization'] = f'Bearer {token}'
-            
-            payload = {
-                'message': message,
-                'timestamp': 'now',
-                'level': 'info'
-            }
-            
-            response = requests.post(
-                f"{host}/api/logs",
-                json=payload,
-                headers=headers,
-                timeout=5
-            )
+            endpoint = "log"
+            url = f"{host}/{endpoint}"
+            body = {"level": "info", "msg_body": str(message)}
+            logging.debug(f"CMSS logger URL: {url}, body: {body}")
+            response = requests.post(url, json=body)
+            logging.debug(f"CMSS logger response status: {response.status_code}")
             
             if response.status_code == 200:
                 logging.debug("Successfully sent log to CMSS")
             else:
-                logging.warning(f"CMSS logging failed with status {response.status_code}")
+                logging.debug(f"CMSS logging failed with status {response.status_code}")
                 
         except Exception as e:
-            logging.warning(f"Failed to send log to CMSS: {e}")
+            logging.debug(f"Failed to send log to CMSS: {e}")
     
     @staticmethod
     def cmss_product_available(product_info: Dict[str, Any], host: str, token: str = None) -> None:
@@ -415,7 +405,7 @@ class LoggingUtils:
                 headers['Authorization'] = f'Bearer {token}'
             
             response = requests.post(
-                f"{host}/api/products/available",
+                f"{host}/product",
                 json=product_info,
                 headers=headers,
                 timeout=10
