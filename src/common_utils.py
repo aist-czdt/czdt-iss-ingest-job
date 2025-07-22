@@ -259,8 +259,8 @@ class MaapUtils:
 
         if os.path.exists("_job.json"):
             with open("_job.json", 'r') as fr:
-                job_info = json.load(fr)
-                job_id = job_info.get("job_id", "")
+                job_info = json.load(fr).get("job_info", {})
+                job_id = job_info.get("job_payload", {}).get("payload_task_id", "")
                 logging.debug(f"Retrieved job ID: {job_id}")
                 return job_id
         return ""
