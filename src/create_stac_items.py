@@ -159,7 +159,7 @@ def ensure_collection_exists(mmgis_url, mmgis_token, collection_id, tif_file_pat
     variable_name = extract_variable_from_tif_filename(tif_file_path)
     
     # Create new collection with variable name appended
-    full_collection_id = f"{collection_id}_{variable_name}"
+    full_collection_id = f"{collection_id}-{variable_name}"
     
     # Check if the full collection ID already exists
     if check_collection_exists(mmgis_url, mmgis_token, full_collection_id):
