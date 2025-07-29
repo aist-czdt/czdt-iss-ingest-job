@@ -179,7 +179,7 @@ def ensure_collection_exists(mmgis_url, mmgis_token, collection_id, tif_file_pat
     return success, full_collection_id
 
 
-def create_stac_items(mmgis_url, mmgis_token, collection_id, file_or_folder_path, path_remove="", path_replace_with="", upsert=False, regex=None, time_from_fn=None, starttime=None, endtime=None):
+def create_stac_items(mmgis_url, mmgis_token, collection_id, file_or_folder_path, path_remove="", path_replace_with="", upsert=True, regex=None, time_from_fn=None, starttime=None, endtime=None):
     """Create STAC items from a collection id and input file location.
 
     Args:
