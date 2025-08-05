@@ -91,6 +91,18 @@ def upsert_collection(mmgis_url, mmgis_token, collection_id, collection, collect
             remote_collection.add_items(collection_items)
             remote_collection.update_extent_from_items()
 
+            response = requests.put(
+                f"{mmgis_url}/stac/collections/{collection_id}",
+                json=remote_collection.to_dict(),
+                headers={
+                    'Authorization': f'Bearer {mmgis_token}',
+                    'Content-Type': 'application/json'
+                }
+            )
+            response.raise_for_status()
+
+            print(f"Collection '{collection_id}' updated successfully.")
+
         return remote_collection
     else:
         print(f"No existing collection with id {collection_id}. Creating new collection...")

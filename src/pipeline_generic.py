@@ -323,12 +323,14 @@ def catalog_products(args, maap, cog_jobs, zarr_job):
             for coll in collections:
                 collection_data = coll.to_dict()
                 collection_id = collection_data['id']
+                collection_items = coll.get_items()
 
                 upserted_collection = create_stac_items.upsert_collection(
                     mmgis_url=args.mmgis_host,
                     mmgis_token=czdt_token,
                     collection_id=collection_id,
-                    collection=coll
+                    collection=coll,
+                    collection_items=collection_items
                 )
 
                 msg = f"STAC catalog update complete for collection {collection_id}."
@@ -336,7 +338,7 @@ def catalog_products(args, maap, cog_jobs, zarr_job):
                 LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host)
 
                 asset_urls = []
-                for item in coll.get_items(recursive=True):
+                for item in collection_items:
                     for asset_key, asset in item.assets.items():
                         asset_urls.append(asset.href)
 
@@ -369,44 +371,48 @@ async def main():
         maap = MaapUtils.get_maap_instance(maap_host_to_use)
         
         logging.info(f"Processing {input_type} input")
+
+        cog_jobs = [maap.getJob("853116bf-cda9-446c-9ab1-5d475d4e51d8")]
+
+        catalog_products(args, maap, cog_jobs, None)
         
-        if input_type == "daac":
-            # DAAC → NetCDF → Zarr → (optional concat) → COG → Catalog
-            logger.debug("Starting DAAC pipeline: stage → netcdf2zarr → concat? → zarr2cog → catalog")
-            staged_job = await stage_from_daac(args, maap)
-            zarr_job = await convert_netcdf_to_zarr(args, maap, staged_job)
-            
-            if args.enable_concat:
-                logger.debug("Concatenation enabled, performing Zarr concatenation")
-                zarr_job = await concatenate_zarr(args, maap, zarr_job)
-            else:
-                logger.debug("Concatenation disabled, skipping concatenation step")
-            
-            cog_jobs = await convert_zarr_to_cog(args, maap, zarr_job)
-            catalog_products(args, maap, cog_jobs, zarr_job)
-            logger.debug("DAAC pipeline completed successfully")
-            
-        elif input_type == "s3_netcdf":
-            # S3 NetCDF → Zarr → (optional concat) → COG → Catalog
-            logger.debug("Starting S3 NetCDF pipeline: netcdf2zarr → concat? → zarr2cog → catalog")
-            zarr_job = await convert_netcdf_to_zarr(args, maap, args.input_s3)
-            
-            if args.enable_concat:
-                logger.debug("Concatenation enabled, performing Zarr concatenation")
-                zarr_job = await concatenate_zarr(args, maap, zarr_job)
-            else:
-                logger.debug("Concatenation disabled, skipping concatenation step")
-            
-            cog_jobs = await convert_zarr_to_cog(args, maap, zarr_job)
-            catalog_products(args, maap, cog_jobs, zarr_job)
-            logger.debug("S3 NetCDF pipeline completed successfully")
-            
-        elif input_type == "s3_zarr":
-            # S3 Zarr → COG → Catalog (skip NetCDF conversion and concat)
-            logger.debug("Starting S3 Zarr pipeline: zarr2cog → catalog")
-            cog_jobs = await convert_zarr_to_cog(args, maap, args.input_s3)
-            catalog_products(args, maap, cog_jobs, None)
-            logger.debug("S3 Zarr pipeline completed successfully")
+        # if input_type == "daac":
+        #     # DAAC → NetCDF → Zarr → (optional concat) → COG → Catalog
+        #     logger.debug("Starting DAAC pipeline: stage → netcdf2zarr → concat? → zarr2cog → catalog")
+        #     staged_job = await stage_from_daac(args, maap)
+        #     zarr_job = await convert_netcdf_to_zarr(args, maap, staged_job)
+        #
+        #     if args.enable_concat:
+        #         logger.debug("Concatenation enabled, performing Zarr concatenation")
+        #         zarr_job = await concatenate_zarr(args, maap, zarr_job)
+        #     else:
+        #         logger.debug("Concatenation disabled, skipping concatenation step")
+        #
+        #     cog_jobs = await convert_zarr_to_cog(args, maap, zarr_job)
+        #     catalog_products(args, maap, cog_jobs, zarr_job)
+        #     logger.debug("DAAC pipeline completed successfully")
+        #
+        # elif input_type == "s3_netcdf":
+        #     # S3 NetCDF → Zarr → (optional concat) → COG → Catalog
+        #     logger.debug("Starting S3 NetCDF pipeline: netcdf2zarr → concat? → zarr2cog → catalog")
+        #     zarr_job = await convert_netcdf_to_zarr(args, maap, args.input_s3)
+        #
+        #     if args.enable_concat:
+        #         logger.debug("Concatenation enabled, performing Zarr concatenation")
+        #         zarr_job = await concatenate_zarr(args, maap, zarr_job)
+        #     else:
+        #         logger.debug("Concatenation disabled, skipping concatenation step")
+        #
+        #     cog_jobs = await convert_zarr_to_cog(args, maap, zarr_job)
+        #     catalog_products(args, maap, cog_jobs, zarr_job)
+        #     logger.debug("S3 NetCDF pipeline completed successfully")
+        #
+        # elif input_type == "s3_zarr":
+        #     # S3 Zarr → COG → Catalog (skip NetCDF conversion and concat)
+        #     logger.debug("Starting S3 Zarr pipeline: zarr2cog → catalog")
+        #     cog_jobs = await convert_zarr_to_cog(args, maap, args.input_s3)
+        #     catalog_products(args, maap, cog_jobs, None)
+        #     logger.debug("S3 Zarr pipeline completed successfully")
         
         logging.info("Generic pipeline completed successfully!")
         logger.debug("All pipeline steps completed without errors")
