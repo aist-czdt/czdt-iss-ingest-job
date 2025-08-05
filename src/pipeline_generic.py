@@ -9,9 +9,9 @@ from maap.maap import MAAP
 from maap.dps.dps_job import DPSJob
 import asyncio
 import create_stac_items
-import requests
 from os.path import basename, join
-from datetime import datetime, timezone
+import fsspec
+import pystac
 from common_utils import (
     MaapUtils, LoggingUtils, ConfigUtils, AWSUtils
 )
@@ -293,44 +293,65 @@ async def convert_zarr_to_cog(args, maap, zarr_source):
 def catalog_products(args, maap, cog_jobs, zarr_job):
     """Catalog processed products to STAC"""
     logger.debug(f"Starting product cataloging for {len(cog_jobs)} COG jobs")
-    tif_files = MaapUtils.get_dps_output(cog_jobs, ".tif")
-    logger.debug(f"Found {len(tif_files)} TIF files for cataloging: {tif_files}")
+    stac_cat_file = MaapUtils.get_dps_output(cog_jobs, "catalog.json")[0]
+    logger.debug(f"Found STAC file for cataloging: {stac_cat_file}.")
     czdt_token = maap.secrets.get_secret(args.titiler_token_secret_name)
     logger.debug(f"Retrieved CZDT token from secret: {args.titiler_token_secret_name}")
-    
-    msg = f"Cataloging {len(tif_files)} COG file(s) to STAC"
+
+    bucket_name, catalog_path = AWSUtils.parse_s3_path(stac_cat_file)
+    presigned_url = maap.aws.s3_signed_url(bucket_name, catalog_path)['url']
+
+    with fsspec.open(presigned_url, "r") as f:
+        data = json.load(f)
+
+    with open("catalog.json", 'w') as fr: 
+        fr.write(json.dumps(data, indent=4))
+
+    catalog = pystac.Catalog.from_dict(data)
+    catalog.set_self_href(presigned_url)
+    catalog.make_all_asset_hrefs_absolute()
+
+    coll_count = len(list(catalog.get_collections()))
+    item_count = len(list(catalog.get_items(recursive=True)))
+
+    msg = f"Updating STAC catalog with {item_count} items across {coll_count} collections."
     print(msg)
     LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host)
 
-    utc_now = datetime.now(timezone.utc)
-    # Format as ISO 8601 with 'Z' for UTC
-    formatted_utc_time = utc_now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    for root, collections, items in catalog.walk():
+        if collections:
+            for coll in collections:
+                collection_data = coll.to_dict()
+                collection_id = collection_data['id']
 
-    stac_records = []
-    
-    for i, tif_file in enumerate(tif_files):
-        logger.debug(f"Cataloging TIF file {i+1}/{len(tif_files)}: {tif_file}")
-        stac_record = create_stac_items.create_stac_items(
-            mmgis_url=args.mmgis_host,
-            mmgis_token=czdt_token,
-            collection_id=args.collection_id,
-            file_or_folder_path=tif_file,
-            starttime=formatted_utc_time
-        )
-        stac_records += stac_record
-        logger.debug(f"STAC item : {stac_record}")
+                upserted_collection = create_stac_items.upsert_collection(
+                    mmgis_url=args.mmgis_host,
+                    mmgis_token=czdt_token,
+                    collection_id=collection_id,
+                    collection=coll
+                )
 
-    product_uris = tif_files
-    
-    product_details = {
-        "collection": args.collection_id,
-        "ogc": stac_records,
-        "uris": product_uris,
-        "job_id": MaapUtils.get_job_id()
-    }
-    logger.debug(f"Product details for notification: {product_details}")
-    LoggingUtils.cmss_product_available(product_details, args.cmss_logger_host)
-    LoggingUtils.cmss_logger(f"Product available for collection {args.collection_id}", args.cmss_logger_host)
+                msg = f"STAC catalog update complete for collection {collection_id}."
+                print(msg)
+                LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host)
+
+                asset_urls = []
+                for item in coll.get_items(recursive=True):
+                    for asset_key, asset in item.assets.items():
+                        asset_urls.append(asset.href)
+
+                if asset_urls:
+                    product_details = {
+                        "collection": collection_id,
+                        "ogc": upserted_collection.to_dict(),
+                        "uris": asset_urls,
+                        "job_id": MaapUtils.get_job_id()
+                    }
+
+                    logger.debug(f"Product details for notification: {product_details}")
+                    LoggingUtils.cmss_product_available(product_details, args.cmss_logger_host)
+                    LoggingUtils.cmss_logger(f"Products available for collection {collection_id}", args.cmss_logger_host)
+
     logger.debug("Product cataloging completed successfully")
 
 async def main():
