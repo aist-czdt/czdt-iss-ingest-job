@@ -344,7 +344,7 @@ def catalog_products(args, maap, cog_jobs, zarr_job):
                     LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host)
 
                     # Get the new STAC-hosted collection URI
-                    self_url = create_stac_items.get_collection(args.mmgis_url, czdt_token, collection_id).self_href
+                    self_url = create_stac_items.get_collection(args.mmgis_host, czdt_token, collection_id).self_href
                     ogc_uris.append(self_url)
 
                     for item in upserted_collection.get_items():
