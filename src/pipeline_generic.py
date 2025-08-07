@@ -349,7 +349,8 @@ def catalog_products(args, maap, cog_jobs, zarr_job):
 
                     for item in upserted_collection.get_items():
                         for asset_key, asset in item.assets.items():
-                            asset_uris.append(asset.href)
+                            if asset.href not in asset_uris:
+                                asset_uris.append(asset.href)
 
     product_details = {
         "collection": args.collection_id,
