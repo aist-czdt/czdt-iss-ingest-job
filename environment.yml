@@ -7,6 +7,8 @@ dependencies:
   - rioxarray
   - numpy
   - gdal
+  - pystac
+  - fsspec
   - rio-stac
   - boto3
   - jq
