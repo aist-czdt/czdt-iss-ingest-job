@@ -352,7 +352,7 @@ def catalog_products(args, maap, cog_jobs, zarr_job):
                             asset_uris.append(asset.href)
 
     product_details = {
-        "collection": collection_id,
+        "collection": args.collection_id,
         "ogc": ogc_uris,
         "uris": asset_uris,
         "job_id": MaapUtils.get_job_id()
