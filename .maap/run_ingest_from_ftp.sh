@@ -4,19 +4,11 @@
 basedir=$( cd "$(dirname "$0")" ; pwd -P )
 root_dir=$(dirname "${basedir}")
 ftp_server="$1"
-search_keyword="$2"
-s3_bucket="$3"
-s3_prefix="$4"
-role_arn="$5"
-overwrite_existing="$6"
+area_of_interest="$2"
 
 mkdir -p output
 source activate ingest
 
 python "${root_dir}"/src/stage_from_ftp.py \
     --ftp-server "${ftp_server}" \
-    --search-keyword "${search_keyword}" \
-    --s3-bucket "${s3_bucket}" \
-    --s3-prefix "${s3_prefix}" \
-    --role-arn "${role_arn}" \
-    --overwrite-existing "${overwrite_existing}" 
+    --area-of-interest "${area_of_interest}"

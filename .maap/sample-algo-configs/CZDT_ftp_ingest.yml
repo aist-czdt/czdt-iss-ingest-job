@@ -13,8 +13,8 @@ inputs:
     name: ftp_server
     required: true
   - default: none
-    description: The keyword to search within the ftp files of interest
-    name: search_keyword
+    description: The area of interest to filter on within the ftp files.
+    name: area_of_interest
     required: true
   - default: none
     description: The name of the target S3 bucket for uploading the granule.
@@ -29,6 +29,18 @@ inputs:
     description: Optional AWS IAM Role ARN to assume for S3 upload.
     name: role_arn 
     required: true
+  - default: none
+    description: Used for logging pipeline messages.
+    name: cmss_logger_host 
+    required: true
+  - default: none
+    description: Used for cataloging stac items.
+    name: mmgis_host 
+    required: true
+  - default: none
+    description: The name of the maap secret used for storing the mmgis-host token.
+    name: titiler_token_secret_name 
+    required: true
   - default: 'false'
     description: If set to true, ftp files will be processed and re-uploaded even if already previously uploaded.
     name: overwrite_existing 
@@ -39,5 +51,5 @@ inputs:
     name: local_download_path
     required: true
 queue: maap-dps-czdt-worker-8gb
-repository_url: https://github.com/sujen1412/czdt-iss-ingest-job.git
+repository_url: https://github.com/aist-czdt/czdt-iss-ingest-job.git
 run_command: czdt-iss-ingest-job/.maap/run_ingest_from_ftp.sh
