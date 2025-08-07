@@ -22,13 +22,24 @@ def parse_arguments():
     Returns:
         argparse.Namespace: An object containing the parsed command-line arguments.
     """
-    parser = ConfigUtils.get_common_argument_parser()
-    parser.description = "Search for a MAAP granule, download it, and upload it to an AWS S3 bucket."
-    
-    # Add script-specific arguments
+    parser = argparse.ArgumentParser(
+        description="Search for a MAAP granule, download it, and upload it to an AWS S3 bucket.")
+    parser.add_argument("--granule-id", required=True,
+                        help="The Granule ID to search for (e.g., Granule UR or a producer granule ID recognizable by MAAP's CMR search).")
+    parser.add_argument("--collection-id", required=True,
+                        help="The Collection Concept ID (e.g., C123456789-MAAP) for the granule's collection.")
+    parser.add_argument("--s3-bucket", required=True,
+                        help="The name of the target S3 bucket for uploading the granule.")
+    parser.add_argument("--s3-prefix", default="",
+                        help="Optional S3 prefix (folder path) within the bucket. Do not use leading/trailing slashes. "
+                             "The granule will be placed under <s3-prefix>/<collection-id>/<filename>.")
     parser.add_argument("--local-download-path", required=False, default="output",
                         help="Local directory path where the granule will be temporarily downloaded.")
-    
+    parser.add_argument("--role-arn",
+                        help="Optional AWS IAM Role ARN to assume for S3 upload. "
+                             "Useful for cross-account S3 bucket access.")
+    parser.add_argument("--maap-host", default="api.maap-project.org",  # Default MAAP API host
+                        help="MAAP API host. Defaults to 'api.ops.maap-project.org' if not overridden by MAAP_API_HOST env var.")
     return parser.parse_args()
 
 
