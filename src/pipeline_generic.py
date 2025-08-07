@@ -205,8 +205,8 @@ async def concatenate_zarr(args, maap, zarr_job):
         "algo_id": "CZDT_ZARR_CONCAT",
         "version": "master",
         "queue": args.job_queue,
-        "config": "s3://maap-ops-workspace/rileykk/sample_merra2_cfg.yaml",
-        "config_path": 'input/sample_merra2_cfg.yaml',
+        "config": args.zarr_config_url,
+        "config_path": join('input', basename(args.zarr_config_url)),
         "zarr_manifest": f"s3://maap-ops-workspace/{maap_username}/zarr_concat_manifests/{zarr_job.id}.json",
         "zarr_access": "mount",
         "duration": "P5D",
@@ -320,6 +320,9 @@ def catalog_products(args, maap, cog_jobs, zarr_job):
     print(msg)
     LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host)
 
+    ogc_uris = []
+    asset_uris = []
+
     for root, collections, items in catalog.walk():
         if collections:
             for coll in collections:
@@ -335,26 +338,26 @@ def catalog_products(args, maap, cog_jobs, zarr_job):
                     collection_items=collection_items
                 )
 
+                ogc_uris.append(upserted_collection.self_href)
+
                 msg = f"STAC catalog update complete for collection {collection_id}."
                 print(msg)
                 LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host)
 
-                asset_urls = []
-                for item in collection_items:
+                for item in upserted_collection.get_items():
                     for asset_key, asset in item.assets.items():
-                        asset_urls.append(asset.href)
+                        asset_uris.append(asset.href)
 
-                if asset_urls:
-                    product_details = {
-                        "collection": collection_id,
-                        "ogc": upserted_collection.to_dict(),
-                        "uris": asset_urls,
-                        "job_id": MaapUtils.get_job_id()
-                    }
+    product_details = {
+        "collection": collection_id,
+        "ogc": ogc_uris,
+        "uris": asset_uris,
+        "job_id": MaapUtils.get_job_id()
+    }
 
-                    logger.debug(f"Product details for notification: {product_details}")
-                    LoggingUtils.cmss_product_available(product_details, args.cmss_logger_host)
-                    LoggingUtils.cmss_logger(f"Products available for collection {collection_id}", args.cmss_logger_host)
+    logger.debug(f"Product details for notification: {product_details}")
+    LoggingUtils.cmss_product_available(product_details, args.cmss_logger_host)
+    LoggingUtils.cmss_logger(f"Products available for collection {collection_id}", args.cmss_logger_host)
 
     logger.debug("Product cataloging completed successfully")
 
