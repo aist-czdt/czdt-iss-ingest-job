@@ -338,15 +338,18 @@ def catalog_products(args, maap, cog_jobs, zarr_job):
                     collection_items=collection_items
                 )
 
-                ogc_uris.append(upserted_collection.self_href)
+                if upserted_collection:
+                    msg = f"STAC catalog update complete for collection {collection_id}."
+                    print(msg)
+                    LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host)
 
-                msg = f"STAC catalog update complete for collection {collection_id}."
-                print(msg)
-                LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host)
+                    # Get the new STAC-hosted collection URI
+                    self_url = create_stac_items.get_collection(args.mmgis_url, czdt_token, collection_id).self_href
+                    ogc_uris.append(self_url)
 
-                for item in upserted_collection.get_items():
-                    for asset_key, asset in item.assets.items():
-                        asset_uris.append(asset.href)
+                    for item in upserted_collection.get_items():
+                        for asset_key, asset in item.assets.items():
+                            asset_uris.append(asset.href)
 
     product_details = {
         "collection": collection_id,
