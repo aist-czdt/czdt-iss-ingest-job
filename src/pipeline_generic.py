@@ -257,14 +257,16 @@ async def convert_zarr_to_cog(args, maap, zarr_source):
         job_params = {
             "identifier": f"Generic-Pipeline_zarr_2_cog_{identifier_suffix}",
             "algo_id": "CZDT_ZARR_TO_COG",
-            "version": "master",
+            "version": "create-stac",
             "queue": args.job_queue,
             "zarr": f"{zarr_file}/",
             "zarr_access": "stage",
             "time": "time",
             "latitude": "lat",
             "longitude": "lon",
-            "output_name": output_name
+            "output_name": output_name,
+            "concept_id": args.collection_id
+
         }
         logger.debug(f"Submitting Zarr to COG job with parameters: {job_params}")
         job = maap.submitJob(**job_params)
