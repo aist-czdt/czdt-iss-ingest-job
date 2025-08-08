@@ -351,7 +351,7 @@ def catalog_products(args, maap, cog_jobs, zarr_job):
                         
                         for asset_key, asset in item.assets.items():
                             if asset_key == "asset" and asset.href not in asset_uris:
-                                asset_urls.append(asset.href)
+                                asset_uris.append(asset.href)
 
     product_details = {
         "concept_id": args.collection_id,
