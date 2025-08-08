@@ -157,7 +157,7 @@ async def convert_netcdf_to_zarr(args, maap, input_source):
     
     if s3_zarr_urls:        
         product_details = {
-            "collection": args.collection_id,
+            "concept_id": args.collection_id,
             "ogc": [],
             "uris": s3_zarr_urls,
             "job_id": MaapUtils.get_job_id()
@@ -343,17 +343,18 @@ def catalog_products(args, maap, cog_jobs, zarr_job):
                     print(msg)
                     LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host)
 
-                    # Get the new STAC-hosted collection URI
-                    self_url = create_stac_items.get_collection(args.mmgis_host, czdt_token, collection_id).self_href
-                    ogc_uris.append(self_url)
+                    # Get the new STAC-hosted collection URIs
+                    stac_coll = create_stac_items.get_item_collection(args.mmgis_host, czdt_token, collection_id)
 
-                    for item in upserted_collection.get_items():
+                    for item in list(stac_coll.items):
+                        ogc_uris.append(item.self_href)
+                        
                         for asset_key, asset in item.assets.items():
-                            if asset.href not in asset_uris:
-                                asset_uris.append(asset.href)
+                            if asset_key == "asset" and asset.href not in asset_uris:
+                                asset_urls.append(asset.href)
 
     product_details = {
-        "collection": args.collection_id,
+        "concept_id": args.collection_id,
         "ogc": ogc_uris,
         "uris": asset_uris,
         "job_id": MaapUtils.get_job_id()

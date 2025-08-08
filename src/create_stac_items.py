@@ -17,7 +17,7 @@ from datetime import datetime
 from rio_stac import create_stac_item
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import pystac
-from pystac import Collection
+from pystac import Collection, ItemCollection
 
 
 def extract_variable_from_tif_filename(tif_file_path):
@@ -69,6 +69,23 @@ def get_collection(mmgis_url, mmgis_token, collection_id):
         response = requests.get(url, headers={'Authorization': f'Bearer {mmgis_token}'})
         if response.status_code == 200:
             return Collection.from_dict(json.loads(response.text))
+        else:
+            return None
+    except requests.RequestException as e:
+        print(f"Error checking collection existence: {e}")
+        return False
+
+
+def get_item_collection(mmgis_url, mmgis_token, collection_id):
+    """
+    Returns item collection if collection exists, None otherwise.
+    """
+    url = f'{mmgis_url}/stac/collections/{collection_id}/items'
+    
+    try:
+        response = requests.get(url, headers={'Authorization': f'Bearer {mmgis_token}'})
+        if response.status_code == 200:
+            return ItemCollection.from_dict(json.loads(response.text))
         else:
             return None
     except requests.RequestException as e:
