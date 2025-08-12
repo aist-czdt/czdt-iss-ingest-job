@@ -343,11 +343,8 @@ def catalog_products(args, maap, cog_jobs, zarr_job):
                     print(msg)
                     LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host)
 
-                    # Get the new STAC-hosted collection URIs
-                    stac_coll = create_stac_items.get_item_collection(args.mmgis_host, czdt_token, collection_id)
-
-                    for item in list(stac_coll.items):
-                        ogc_uris.append(item.self_href)
+                    for item in collection_items:
+                        ogc_uris.append(f"{args.mmgis_host}/stac/collections/{collection_id}/items/{item.id}")
                         
                         for asset_key, asset in item.assets.items():
                             if asset_key == "asset" and asset.href not in asset_uris:
