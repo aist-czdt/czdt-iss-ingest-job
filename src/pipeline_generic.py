@@ -295,7 +295,13 @@ async def convert_zarr_to_cog(args, maap, zarr_source):
 def catalog_products(args, maap, cog_jobs, zarr_job):
     """Catalog processed products to STAC"""
     logger.debug(f"Starting product cataloging for {len(cog_jobs)} COG jobs")
-    stac_cat_file = MaapUtils.get_dps_output(cog_jobs, "catalog.json")[0]
+    stac_cat_files = MaapUtils.get_dps_output(cog_jobs, "catalog.json")   
+    if not stac_cat_files:
+        err = "No STAC catalog files found from COG conversion"
+        logger.debug(err)
+        raise RuntimeError(err)
+
+    stac_cat_file = stac_cat_files[0]
     logger.debug(f"Found STAC file for cataloging: {stac_cat_file}.")
     czdt_token = maap.secrets.get_secret(args.titiler_token_secret_name)
     logger.debug(f"Retrieved CZDT token from secret: {args.titiler_token_secret_name}")
