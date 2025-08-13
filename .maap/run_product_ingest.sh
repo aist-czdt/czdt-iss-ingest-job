@@ -24,7 +24,8 @@ role_arn=$(jq -r '.params.role_arn // empty' _job.json)
 cmss_logger_host=$(jq -r '.params.cmss_logger_host // empty' _job.json)
 mmgis_host=$(jq -r '.params.mmgis_host // empty' _job.json)
 titiler_token_secret_name=$(jq -r '.params.titiler_token_secret_name // empty' _job.json)
-job_queue=$(jq -r '.job_info.job_queue // empty' _job.json)
+default_queue=$(jq -r '.job_info.job_queue // empty' _job.json)
+job_queue=$(jq -r '.params.job_queue // empty' _job.json)
 zarr_config_url=$(jq -r '.params.zarr_config_url // empty' _job.json)
 variables=$(jq -r '.params.variables // "*"' _job.json)
 enable_concat=$(jq -r '.params.enable_concat // "false"' _job.json)
@@ -52,13 +53,12 @@ if [[ -z "${titiler_token_secret_name}" ]]; then
     echo "ERROR: titiler_token_secret_name is required"
     exit 1
 fi
-if [[ -z "${job_queue}" ]]; then
-    echo "ERROR: job_queue is required"
-    exit 1
-fi
 if [[ -z "${zarr_config_url}" ]]; then
     echo "ERROR: zarr_config_url is required"
     exit 1
+fi
+if [[ -z "${job_queue}" ]]; then
+    job_queue="${default_queue}"
 fi
 
 # Debug: Show parsed parameters
