@@ -16,6 +16,6 @@ dependencies:
   - jq
   - pip
   - backoff
-  - dateutil
+  - python-dateutil
   - pip:
     - maap-py
