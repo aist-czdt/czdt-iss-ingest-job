@@ -17,5 +17,6 @@ dependencies:
   - pip
   - backoff
   - python-dateutil
+  - pyyaml
   - pip:
     - maap-py

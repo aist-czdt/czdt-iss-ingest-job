@@ -26,6 +26,7 @@ end_date=$(jq -r '.params.end_date // "2999-12-31T23:59:59Z"' _job.json)
 days_back=$(jq -r '.params.days_back // empty' _job.json)
 sdap_collection=$(jq -r '.params.sdap_collection // empty' _job.json)
 sdap_base_url=$(jq -r '.params.sdap_base_url // empty' _job.json)
+variable=$(jq -r '.params.variable // empty' _job.json)
 
 # Validate required parameters
 if [[ -z "${mmgis_host}" ]]; then
@@ -56,6 +57,10 @@ if [[ -z "${sdap_base_url}" ]]; then
     echo "ERROR: sdap_base_url is required"
     exit 1
 fi
+if [[ -z "${variable}" ]]; then
+    echo "ERROR: variable is required"
+    exit 1
+fi
 
 # Debug: Show parsed parameters
 echo "=== Parsed Parameters from _job.json ==="
@@ -70,6 +75,7 @@ echo "end_date: ${end_date}"
 echo "days_back: ${days_back}"
 echo "sdap_collection: ${sdap_collection}"
 echo "sdap_base_url: ${sdap_base_url}"
+echo "variable: ${variable}"
 echo "========================================"
 
 # Build arguments for the generic pipeline
@@ -83,6 +89,7 @@ args=(
     --stac-collection "${stac_collection}"
     --sdap-collection-name "${sdap_collection}"
     --sdap-base-url "${sdap_base_url}"
+    --variable "${variable}"
 )
 
 if [[ -z "${days_back}" ]]; then

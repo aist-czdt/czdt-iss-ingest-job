@@ -11,6 +11,9 @@ import logging
 import os
 import asyncio
 from pipeline_generic import wait_for_completion
+import requests
+import yaml
+import tempfile
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
@@ -27,7 +30,50 @@ def _try_delete(bucket, key, s3):
         logger.error(f'Failed to delete s3://{bucket}/{key}: {e}')
 
 
+def _check_collection_in_sdap(args):
+    url = f'{args.sdap_base_url.rstrip("/")}/list'
+
+    logger.info('Listing SDAP collections')
+
+    try:
+        response = requests.get(url, params={'nocached': True})
+        response.raise_for_status()
+    except Exception as e:
+        logger.error(f'Failed to list collections: {e}')
+        raise e
+
+    collections = response.json()
+
+    logger.info(f'There are {len(collections):,} collections in SDAP')
+
+    return args.sdap_collection_name in [c['shortName'] for c in collections]
+
+
+def _get_coords_from_config(args, s3_client):
+    parsed_url = urlparse(args.zarr_config_url)
+
+    fd, local_file = tempfile.mkstemp(prefix='config', suffix='_temp.yaml')
+
+    with os.fdopen(fd, 'wb') as f:
+        s3_client.download_fileobj(parsed_url.netloc, parsed_url.path.lstrip('/'), f)
+
+    with open(local_file, 'r') as f:
+        config = yaml.safe_load(f)
+
+    if 'coordinates' not in config:
+        return {
+            'time': 'time',
+            'latitude': 'latitude',
+            'longitude': 'longitude'
+        }
+
+    return config['coordinates']
+
+
 async def main(args):
+    start_time = datetime.now()
+    s3_client = boto3.client('s3')
+
     maap_host_to_use = os.environ.get('MAAP_API_HOST', args.maap_host)
     logger.debug(f"Using MAAP host: {maap_host_to_use}")
     maap = MaapUtils.get_maap_instance(maap_host_to_use)
@@ -86,7 +132,6 @@ async def main(args):
         logger.info(f'Creating zarr concatenation manifest from {len(zarr_s3_urls):,} zarr URLs')
 
         maap_username = maap.profile.account_info()['username']
-        s3_client = boto3.client('s3')
 
         # Create manifest
         os.makedirs("output", exist_ok=True)
@@ -134,9 +179,60 @@ async def main(args):
 
         _try_delete("maap-ops-workspace", manifest_key, s3_client)
 
-        final_zarr_url = MaapUtils.get_dps_output([job], ".zarr", True)
+        final_zarr_url = MaapUtils.get_dps_output([job], ".zarr", True)[0]
 
     logger.info(f'Final Zarr URL: {final_zarr_url}')
+
+    if _check_collection_in_sdap(args):
+        logger.info(f'Collection {args.sdap_collection_name} already exists and will need to be deleted')
+
+        try:
+            response = requests.get(  # Yes, I know this should be a DELETE, it's TBD for SDAP
+                f'{args.sdap_base_url.rstrip("/")}/datasets/remove',
+                params={'name': args.sdap_collection_name},
+            )
+            response.raise_for_status()
+        except Exception as e:
+            logger.error(f'Failed to delete collection {args.sdap_collection_name} from SDAP: {e}')
+            raise RuntimeError('Could not clear existing collection')
+
+    add_url = f'{args.sdap_base_url.rstrip("/")}/datasets/add'
+    add_params = {'name': args.sdap_collection_name, 'path': final_zarr_url}
+    add_headers = {'Content-Type': 'application/yaml'}
+
+    add_body = {
+        'variable': args.variable,
+        'coords': _get_coords_from_config(args, s3_client),
+        'aws': {
+            'region': 'us-west-2',  # We can leave this hardcoded for CZDT
+            'public': False
+        }
+    }
+
+    add_response = requests.post(
+        add_url,
+        params=add_params,
+        headers=add_headers,
+        data=yaml.dump(add_body).encode('utf-8')
+    )
+
+    if not add_response.ok:
+        logger.error(f'Failed to add collection to SDAP: {add_response.text}')
+        raise RuntimeError('Failed to add collection to SDAP')
+
+    if not add_response.json()['success']:
+        logger.error(f'SDAP Add collection API response unsuccessful: {add_response.json()["message"]}')
+        raise RuntimeError('Failed to add collection to SDAP')
+
+    if not _check_collection_in_sdap(args):
+        logger.error(f'Add API call for collection {args.sdap_collection_name} succeeded, but collection is still '
+                     f'not present. This requires investigation\n{add_url=}\n{add_params=}\n{add_headers=}\n'
+                     f'request body: \n{yaml.dump(add_body)}')
+        raise RuntimeError('Failed to add collection to SDAP')
+
+    logger.info(f'Collection {args.sdap_collection_name} added to SDAP')
+
+    logger.info(f'Pipeline completed in {datetime.now() - start_time}')
 
 
 if __name__ == '__main__':
@@ -177,6 +273,13 @@ if __name__ == '__main__':
         '--days-back',
         help='The number of days back to query the STAC API',
         type=int,
+    )
+
+    # TODO: Should this be able to register a list of vars?
+    parser.add_argument(
+        '--variable',
+        help='The name of the variable in the Zarr data to register in SDAP',
+        required=True,
     )
 
     args = parser.parse_args()
