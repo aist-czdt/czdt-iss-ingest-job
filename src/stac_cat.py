@@ -159,7 +159,7 @@ async def main(args):
             "config_path": os.path.join('input', os.path.basename(args.zarr_config_url)),
             "zarr_manifest": f"s3://maap-ops-workspace/{manifest_key}",
             "zarr_access": "mount",
-            # "duration": "P5D",  # No duration needed, should be managed by start & end
+            "duration": "none",  # No duration needed, should be managed by start & end
             "output": f"concat.{manifest_id}.zarr"
         }
 
