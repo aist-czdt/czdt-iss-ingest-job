@@ -11,6 +11,9 @@ if [[ ! -f "_job.json" ]]; then
     echo "ERROR: _job.json file not found"
     exit 1
 fi
+
+conda info --envs
+
 source activate ingest
 
 # Read parameters from _job.json using jq
