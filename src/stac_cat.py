@@ -36,7 +36,7 @@ def _check_collection_in_sdap(args):
     logger.info('Listing SDAP collections')
 
     try:
-        response = requests.get(url, params={'nocached': True})
+        response = requests.get(url, params={'nocached': True}, verify=False)  # TODO: Remove verify=False when able
         response.raise_for_status()
     except Exception as e:
         logger.error(f'Failed to list collections: {e}')
@@ -190,6 +190,7 @@ async def main(args):
             response = requests.get(  # Yes, I know this should be a DELETE, it's TBD for SDAP
                 f'{args.sdap_base_url.rstrip("/")}/datasets/remove',
                 params={'name': args.sdap_collection_name},
+                verify=False  # TODO: Remove verify=False when able
             )
             response.raise_for_status()
         except Exception as e:
@@ -213,7 +214,8 @@ async def main(args):
         add_url,
         params=add_params,
         headers=add_headers,
-        data=yaml.dump(add_body).encode('utf-8')
+        data=yaml.dump(add_body).encode('utf-8'),
+        verify=False  # TODO: Remove verify=False when able
     )
 
     if not add_response.ok:
