@@ -336,6 +336,12 @@ def catalog_products(args, maap, cog_jobs, zarr_job):
                 collection_id = collection_data['id']
                 collection_items = coll.get_items()
 
+                # Convert item hrefs to s3 uris
+                for item in collection_items:
+                    for asset_key, asset in item.assets.items():
+                        if asset.href.startswith("https://") and ".s3." in asset.href:
+                            asset.href = AWSUtils.convert_s3_http_to_s3_uri(asset.href)
+
                 upserted_collection = create_stac_items.upsert_collection(
                     mmgis_url=args.mmgis_host,
                     mmgis_token=czdt_token,

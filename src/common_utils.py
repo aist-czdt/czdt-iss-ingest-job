@@ -5,6 +5,7 @@ This module consolidates duplicated functions across the codebase into organized
 """
 
 import os
+import re
 import logging
 import argparse
 import boto3
@@ -200,6 +201,39 @@ class AWSUtils:
                 return False
             else:
                 raise
+
+    @staticmethod
+    def convert_s3_http_to_s3_uri(http_s3_link):
+        """
+        Converts an S3 HTTP or HTTPS link to an S3 URI.
+
+        Args:
+            http_s3_link (str): The S3 HTTP or HTTPS link (e.g.,
+                                "https://bucket-name.s3.amazonaws.com/object-key" or
+                                "https://s3.amazonaws.com/bucket-name/object-key").
+
+        Returns:
+            str: The corresponding S3 URI (e.g., "s3://bucket-name/object-key"),
+                or None if the input link is not a valid S3 HTTP/HTTPS link.
+        """
+        # Regex for path-style URLs: https://s3.amazonaws.com/bucket-name/object-key
+        path_style_pattern = r"https?://s3\.amazonaws\.com/([^/]+)/(.*)"
+        # Regex for virtual-hosted-style URLs: https://bucket-name.s3.amazonaws.com/object-key
+        virtual_hosted_style_pattern = r"https?://([^.]+)\.s3\.amazonaws\.com/(.*)"
+
+        match_path_style = re.match(path_style_pattern, http_s3_link)
+        if match_path_style:
+            bucket_name = match_path_style.group(1)
+            object_key = match_path_style.group(2)
+            return f"s3://{bucket_name}/{object_key}"
+
+        match_virtual_hosted_style = re.match(virtual_hosted_style_pattern, http_s3_link)
+        if match_virtual_hosted_style:
+            bucket_name = match_virtual_hosted_style.group(1)
+            object_key = match_virtual_hosted_style.group(2)
+            return f"s3://{bucket_name}/{object_key}"
+
+        return None
 
 
 class MaapUtils:
