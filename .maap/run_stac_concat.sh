@@ -28,6 +28,7 @@ sdap_collection=$(jq -r '.params.sdap_collection // empty' _job.json)
 sdap_base_url=$(jq -r '.params.sdap_base_url // empty' _job.json)
 variable=$(jq -r '.params.variable // empty' _job.json)
 zarr_version=$(jq -r '.params.zarr_version // "3"' _job.json)
+force_concat=$(jq -r '.params.force_concat // "false"' _job.json)
 
 # Validate required parameters
 if [[ -z "${mmgis_host}" ]]; then
@@ -83,6 +84,7 @@ echo "sdap_collection: ${sdap_collection}"
 echo "sdap_base_url: ${sdap_base_url}"
 echo "variable: ${variable}"
 echo "zarr_version: ${zarr_version}"
+echo "force_concat: ${force_concat}"
 echo "========================================"
 
 # Build arguments for the generic pipeline
@@ -107,6 +109,10 @@ if [[ -z "${days_back}" ]]; then
   )
 else
   args+=(--days-back "${days_back}")
+fi
+
+if [[ "${force_concat}" == "true" ]]; then
+  args+=(--force-concat)
 fi
 
 echo "Running STAC concatenation pipeline with parameters: ${args[@]}"

@@ -50,6 +50,8 @@ def _check_collection_in_sdap(args):
 
 
 def _get_coords_from_config(args, s3_client):
+    logger.info(f'Trying to get coordinates from config at {args.zarr_config_url}')
+
     parsed_url = urlparse(args.zarr_config_url)
 
     fd, local_file = tempfile.mkstemp(prefix='config', suffix='_temp.yaml')
@@ -60,7 +62,11 @@ def _get_coords_from_config(args, s3_client):
     with open(local_file, 'r') as f:
         config = yaml.safe_load(f)
 
+    logger.info(f'Downloaded config data: {config}')
+
     if 'coordinates' not in config:
+        logger.info('No coordinate data provided, using defaults')
+
         return {
             'time': 'time',
             'latitude': 'latitude',
@@ -125,7 +131,7 @@ async def main(args):
     if len(zarr_s3_urls) == 0:
         logger.info('No zarr URLs found in STAC over desired window')
         return
-    elif len(zarr_s3_urls) == 1:
+    elif len(zarr_s3_urls) == 1 and not args.force_concat:
         logger.info('Only one matching zarr URL found in STAC over desired window. Skipping concat step')
         final_zarr_url = zarr_s3_urls[0]
     else:
@@ -211,6 +217,11 @@ async def main(args):
         }
     }
 
+    logger.info(f'Issuing collection registration POST request to {add_url}')
+    logger.info(f'params: {add_params}')
+    logger.info(f'headers: {add_headers}')
+    logger.info(f'body: {add_body}')
+
     add_response = requests.post(
         add_url,
         params=add_params,
@@ -291,6 +302,14 @@ if __name__ == '__main__':
         choices=[2, 3],
         default=3,
         help='Version of zarr standard to output'
+    )
+
+    parser.add_argument(
+        '--force-concat',
+        action='store_true',
+        help='Force a concatenation PGE invocation. Useful if the source data zarr version differs from the desired '
+             'zarr version, as STAC queries would otherwise short-circuit the concat PGE if only one item matches, '
+             'registering an undesired format with SDAP'
     )
 
     args = parser.parse_args()
