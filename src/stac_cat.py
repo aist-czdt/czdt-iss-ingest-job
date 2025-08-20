@@ -65,13 +65,16 @@ def _get_coords_from_config(args, s3_client):
     logger.info(f'Downloaded config data: {config}')
 
     if 'coordinates' not in config:
-        logger.info('No coordinate data provided, using defaults')
+        if 'dimensions' in config:
+            config['coordinates'] = config['dimensions']
+        else:
+            logger.info('No coordinate data provided, using defaults')
 
-        return {
-            'time': 'time',
-            'latitude': 'latitude',
-            'longitude': 'longitude'
-        }
+            return {
+                'time': 'time',
+                'latitude': 'latitude',
+                'longitude': 'longitude'
+            }
 
     return config['coordinates']
 
