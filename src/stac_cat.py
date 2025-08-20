@@ -286,7 +286,7 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
-        '--zar-version',
+        '--zarr-version',
         type=int,
         choices=[2, 3],
         default=3,
