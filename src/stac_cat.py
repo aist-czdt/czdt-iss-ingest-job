@@ -160,6 +160,7 @@ async def main(args):
             "zarr_manifest": f"s3://maap-ops-workspace/{manifest_key}",
             "zarr_access": "mount",
             "duration": "none",  # No duration needed, should be managed by start & end
+            "zarr_version": str(args.zarr_version),
             "output": f"concat.{manifest_id}.zarr"
         }
 
@@ -282,6 +283,14 @@ if __name__ == '__main__':
         '--variable',
         help='The name of the variable in the Zarr data to register in SDAP',
         required=True,
+    )
+
+    parser.add_argument(
+        '--zar-version',
+        type=int,
+        choices=[2, 3],
+        default=3,
+        help='Version of zarr standard to output'
     )
 
     args = parser.parse_args()
