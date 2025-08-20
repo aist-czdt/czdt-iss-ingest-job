@@ -162,7 +162,7 @@ async def main(args):
         job_params = {
             "identifier": f"STAC-Concat-Pipeline_zarr_concat_{manifest_id[-7:]}",
             "algo_id": "CZDT_ZARR_CONCAT",
-            "version": "master",
+            "version": "concat-cb",  # TODO: Temp using PGE version to subset to Chesapeake
             "queue": args.job_queue,
             "config": args.zarr_config_url,
             "config_path": os.path.join('input', os.path.basename(args.zarr_config_url)),
