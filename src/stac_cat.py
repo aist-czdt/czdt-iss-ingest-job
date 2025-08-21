@@ -104,6 +104,7 @@ async def main(args):
     logger.info(f'Querying STAC collection {args.stac_collection} between {start} and {end}')
 
     search = stac_catalog.search(
+        method='GET',
         collections=collection,
         datetime=f'{start}/{end}'
     )
