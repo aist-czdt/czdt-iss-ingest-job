@@ -342,6 +342,12 @@ def catalog_products(args, maap, cog_jobs, zarr_job):
                         if asset.href.startswith("https://") and ".s3." in asset.href:
                             asset.href = AWSUtils.convert_s3_http_to_s3_uri(asset.href)
 
+                        ogc_uris.append(f"{args.mmgis_host}/stac/collections/{collection_id}/items/{item.id}")
+
+                        if asset_key == "asset" and asset.href not in asset_uris:
+                            asset_uris.append(asset.href)
+
+
                 upserted_collection = create_stac_items.upsert_collection(
                     mmgis_url=args.mmgis_host,
                     mmgis_token=czdt_token,
@@ -354,13 +360,6 @@ def catalog_products(args, maap, cog_jobs, zarr_job):
                     msg = f"STAC catalog update complete for collection {collection_id}."
                     print(msg)
                     LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host)
-
-                    for item in collection_items:
-                        ogc_uris.append(f"{args.mmgis_host}/stac/collections/{collection_id}/items/{item.id}")
-                        
-                        for asset_key, asset in item.assets.items():
-                            if asset_key == "asset" and asset.href not in asset_uris:
-                                asset_uris.append(asset.href)
 
     product_details = {
         "concept_id": args.collection_id,
