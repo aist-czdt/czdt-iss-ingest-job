@@ -15,5 +15,7 @@ dependencies:
   - jq
   - pip
   - backoff
+  - geoserver-rest==2.9.1
+  - geopandas>=0.12.0
   - pip:
     - maap-py

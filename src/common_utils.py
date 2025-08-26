@@ -576,6 +576,9 @@ class ConfigUtils:
             elif args.input_s3.endswith('.zarr') or args.input_s3.endswith('.zarr/'):
                 logging.debug("Detected S3 Zarr input type")
                 return "s3_zarr"
+            elif args.input_s3.endswith('.gpkg'):
+                logging.debug("Detected S3 GeoPackage input type")
+                return "s3_gpkg"
             else:
                 logging.debug(f"Unsupported file type detected: {args.input_s3}")
                 raise ValueError(f"Unsupported file type in S3 URL: {args.input_s3}")

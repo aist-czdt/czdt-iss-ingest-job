@@ -12,6 +12,7 @@ import create_stac_items
 from os.path import basename, join
 import fsspec
 import pystac
+from geoserver_ingest import GeoServerClient
 from common_utils import (
     MaapUtils, LoggingUtils, ConfigUtils, AWSUtils
 )
@@ -20,6 +21,11 @@ from common_utils import (
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
+GEOSERVER_HOST = "http://100.21.202.199:8880/geoserver/"
+GEOSERVER_WORKSPACE = "czdt"
+GEOSERVER_USER = "ingest"
+GEOSERVER_PASSWORD_SECRET_NAME = "geoserver_secret"
 
 def parse_arguments():
     """
@@ -427,6 +433,43 @@ async def main():
             cog_jobs = await convert_zarr_to_cog(args, maap, args.input_s3)
             catalog_products(args, maap, cog_jobs, None)
             logger.debug("S3 Zarr pipeline completed successfully")
+            
+        elif input_type == "s3_gpkg":
+            # S3 GeoPackage → Upload 
+            logger.debug("Starting S3 GeoPackage pipeline: catalog")
+
+            aws_region_for_s3 = os.environ.get('AWS_REGION', 'us-west-2')
+            s3_client = AWSUtils.get_s3_client(role_arn=args.role_arn, aws_region=aws_region_for_s3)
+            bucket_name, gpkg_path = AWSUtils.parse_s3_path(args.input_s3)    
+
+            # Download the file
+            file_name = os.path.basename(gpkg_path)
+            local_file_path = f"output/{file_name}"
+            s3_client.download_file(bucket_name, gpkg_path, local_file_path)
+
+            print(f"File '{gpkg_path}' downloaded successfully to '{local_file_path}'")
+            logger.debug("Starting Geoserver upload")
+
+            client = GeoServerClient(GEOSERVER_HOST, GEOSERVER_USER, maap.secrets.get_secret(GEOSERVER_PASSWORD_SECRET_NAME))
+            client.create_workspace(GEOSERVER_WORKSPACE)
+            success, layer_names = client.upload_geopackage(local_file_path, GEOSERVER_WORKSPACE)
+
+            if success:
+                logger.debug("S3 GeoPackage pipeline completed successfully")
+                asset_uris = []
+
+                for l in layer_names:
+                    asset_uris.append(f"{GEOSERVER_HOST}{GEOSERVER_WORKSPACE}/ows?service=WFS&version=1.0.0&request=GetFeature&typeName={GEOSERVER_WORKSPACE}%3A{l}&outputFormat=application%2Fjson&maxFeatures=10000")                
+
+                product_details = {
+                    "concept_id": args.collection_id,
+                    "uris": asset_uris,
+                    "job_id": MaapUtils.get_job_id()
+                }
+
+                logger.debug(f"Product details for notification: {product_details}")
+                LoggingUtils.cmss_product_available(product_details, args.cmss_logger_host)
+                LoggingUtils.cmss_logger(f"Products available for collection {args.collection_id}", args.cmss_logger_host)
         
         logging.info("Generic pipeline completed successfully!")
         logger.debug("All pipeline steps completed without errors")
