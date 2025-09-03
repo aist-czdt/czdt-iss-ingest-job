@@ -29,6 +29,7 @@ job_queue=$(jq -r '.params.job_queue // empty' _job.json)
 zarr_config_url=$(jq -r '.params.zarr_config_url // empty' _job.json)
 variables=$(jq -r '.params.variables // "*"' _job.json)
 enable_concat=$(jq -r '.params.enable_concat // "false"' _job.json)
+on_demand=$(jq -r '.params.on_demand // "false"' _job.json)
 local_download_path=$(jq -r '.params.local_download_path // "output"' _job.json)
 maap_host=$(jq -r '.params.maap_host // "api.maap-project.org"' _job.json)
 
@@ -70,6 +71,7 @@ echo "s3_bucket: ${s3_bucket}"
 echo "s3_prefix: ${s3_prefix}"
 echo "variables: ${variables}"
 echo "enable_concat: ${enable_concat}"
+echo "on_demand: ${on_demand}"
 echo "========================================"
 
 mkdir -p "${local_download_path}"
@@ -96,6 +98,11 @@ fi
 # Add enable-concat flag if true
 if [[ "${enable_concat}" == "true" ]]; then
     args+=(--enable-concat)
+fi
+
+# Add enable-concat flag if true
+if [[ "${on_demand}" == "true" ]]; then
+    args+=(--on-demand)
 fi
 
 # Determine input type and add appropriate arguments

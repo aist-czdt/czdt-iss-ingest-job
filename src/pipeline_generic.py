@@ -13,6 +13,7 @@ from os.path import basename, join
 import fsspec
 import pystac
 from geoserver_ingest import GeoServerClient
+from datetime import datetime
 from common_utils import (
     MaapUtils, LoggingUtils, ConfigUtils, AWSUtils
 )
@@ -435,6 +436,9 @@ async def main():
             # Download the file
             file_name = os.path.basename(gpkg_path)
             local_file_path = f"output/{file_name}"
+            if args.on_demand:
+                local_file_path = f"output/ondemand_{datetime.now().strftime("%Y%m%d%H%M%S")}_{file_name}"
+
             s3_client.download_file(bucket_name, gpkg_path, local_file_path)
 
             print(f"File '{gpkg_path}' downloaded successfully to '{local_file_path}'")
