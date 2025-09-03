@@ -100,7 +100,7 @@ if [[ "${enable_concat}" == "true" ]]; then
     args+=(--enable-concat)
 fi
 
-# Add enable-concat flag if true
+# Add on-demand flag if true
 if [[ "${on_demand}" == "true" ]]; then
     args+=(--on-demand)
 fi

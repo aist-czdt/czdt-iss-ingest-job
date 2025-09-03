@@ -541,6 +541,8 @@ class ConfigUtils:
                             help="Variables to extract from NetCDF (default: all variables '*')")
         parser.add_argument("--enable-concat", action="store_true",
                             help="Enable Zarr concatenation step (default: skip)")
+        parser.add_argument("--on-demand", action="store_true",
+                            help="Enable on-demand behavior (default: skip)")
         parser.add_argument("--local-download-path", default="output",
                             help="Local directory for temporary downloads")
         parser.add_argument("--maap-host", default="api.maap-project.org",
