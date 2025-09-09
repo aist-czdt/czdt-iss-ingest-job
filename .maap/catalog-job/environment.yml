@@ -1,0 +1,22 @@
+name: catalog-ingest
+channels:
+  - conda-forge
+dependencies:
+  - xarray
+  - netCDF4
+  - rioxarray
+  - numpy
+  - gdal
+  - pystac
+  - pystac-client
+  - fsspec
+  - rio-stac
+  - boto3
+  - aiohttp
+  - jq
+  - pip
+  - backoff
+  - geoserver-rest==2.9.1
+  - geopandas>=0.12.0
+  - pip:
+    - maap-py
