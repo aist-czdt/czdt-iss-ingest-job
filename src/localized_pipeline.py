@@ -8,8 +8,10 @@ from typing import List
 import pystac
 from geoserver_ingest import GeoServerClient
 from common_utils import (
-    MaapUtils, LoggingUtils, ConfigUtils, AWSUtils
+    MaapUtils, LoggingUtils, ConfigUtils, AWSUtils,
+    GranuleNotFoundError, DownloadError, UploadError
 )
+from stage_from_daac import search_and_download_granule
 
 # Configure logging: DEBUG for this module, INFO for dependencies
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
@@ -93,9 +95,9 @@ def get_enabled_steps(steps_arg: str, input_type: str) -> List[str]:
     """
     if steps_arg == 'all':
         if input_type == "daac":
-            return ['stage', 'netcdf2zarr', 'concat', 'zarr2cog', 'catalog']
+            return ['stage', 'netcdf2zarr', 'zarr2cog', 'catalog']
         elif input_type == "s3_netcdf":
-            return ['netcdf2zarr', 'concat', 'zarr2cog', 'catalog']
+            return ['netcdf2zarr', 'zarr2cog', 'catalog']
         elif input_type == "s3_zarr":
             return ['zarr2cog', 'catalog']
         elif input_type == "s3_gpkg":
@@ -127,15 +129,34 @@ def run_transformer_command(cmd: List[str], description: str) -> subprocess.Comp
         logger.error(f"Command error: {e.stderr}")
         raise RuntimeError(f"{description} failed: {e.stderr}")
 
-def stage_from_daac_local(args, maap):
+def stage_from_daac_local(args, maap) -> str:
     """
     Local implementation of DAAC staging.
-    For now, delegate to the original MAAP job since this requires MAAP infrastructure.
+    Downloads granule from DAAC using MAAP and returns local file path.
+    
+    Args:
+        args: Arguments containing granule_id, collection_id
+        maap: MAAP client instance
+        
+    Returns:
+        str: Path to the locally downloaded granule file
+        
+    Raises:
+        GranuleNotFoundError: If the granule cannot be found
+        DownloadError: If download fails
     """
-    logger.debug("DAAC staging not yet implemented locally, would need MAAP job")
-    # Note: args and maap parameters preserved for future implementation
-    del args, maap  # Suppress unused variable warnings
-    raise NotImplementedError("DAAC staging requires MAAP infrastructure and is not yet implemented for local execution")
+    logger.debug(f"Starting DAAC staging for granule '{args.granule_id}' in collection '{args.collection_id}'")
+    
+    # Set local download directory
+    local_download_dir = getattr(args, 'local_download_path', 'output')
+    
+    # Search and download granule using imported function
+    downloaded_file_path = search_and_download_granule(
+        maap, args.granule_id, args.collection_id, local_download_dir
+    )
+    
+    logger.debug(f"DAAC staging completed successfully, local file: {downloaded_file_path}")
+    return downloaded_file_path
 
 def convert_netcdf_to_zarr_local(args, input_source: str, transformers_path: str) -> str:
     """
@@ -371,12 +392,22 @@ def main():
         if input_type == "daac":
             # DAAC pipeline: stage � netcdf2zarr � concat? � zarr2cog � catalog
             if 'stage' in enabled_steps:
-                # For now, staging from DAAC is not implemented locally
-                raise NotImplementedError("DAAC staging not yet supported in localized pipeline")
+                current_output = stage_from_daac_local(args, maap)
             
-            if 'netcdf2zarr' in enabled_steps:
-                # This would use staged files, not implemented yet
-                raise NotImplementedError("NetCDF to Zarr from DAAC staging not yet supported")
+            if 'netcdf2zarr' in enabled_steps and current_output:
+                current_output = convert_netcdf_to_zarr_local(args, current_output, args.transformers_path)
+                
+            if 'concat' in enabled_steps and args.enable_concat and current_output:
+                logger.debug("Concatenation enabled, performing Zarr concatenation")
+                current_output = concatenate_zarr_local(args, [current_output], args.transformers_path)
+            elif 'concat' in enabled_steps:
+                logger.debug("Concatenation requested but conditions not met, skipping")
+                
+            if 'zarr2cog' in enabled_steps and current_output:
+                cog_paths = convert_zarr_to_cog_local(args, current_output, args.transformers_path)
+                
+            if 'catalog' in enabled_steps:
+                submit_catalog_job(args)
                 
         elif input_type == "s3_netcdf":
             # S3 NetCDF pipeline: netcdf2zarr � concat? � zarr2cog � catalog
