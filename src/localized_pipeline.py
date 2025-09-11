@@ -125,6 +125,7 @@ def stage_from_daac_local(args, maap) -> str:
         GranuleNotFoundError: If the granule cannot be found
         DownloadError: If download fails
     """
+    logger.info(f"STAGE_FROM_DAAC - Args: granule_id='{args.granule_id}', collection_id='{args.collection_id}', local_download_path='{getattr(args, 'local_download_path', 'output')}'")
     logger.debug(f"Starting DAAC staging for granule '{args.granule_id}' in collection '{args.collection_id}'")
     
     # Set local download directory
@@ -151,6 +152,7 @@ def convert_netcdf_to_zarr_local(args) -> str:
     else:
         raise ValueError("No input source found: neither input_netcdf nor input_s3 specified")
     
+    logger.info(f"CONVERT_NETCDF_TO_ZARR - Args: input_source='{input_source}', zarr_config_url='{args.zarr_config_url}', variables='{getattr(args, 'variables', None)}'")
     logger.debug(f"Starting local NetCDF to Zarr conversion for input: {input_source}")
     
     # Prepare output directory
@@ -191,6 +193,7 @@ def concatenate_zarr_local(args, zarr_paths: List[str]) -> str:
     """
     Concatenate Zarr files using direct zarr_concat main function call.
     """
+    logger.info(f"CONCATENATE_ZARR - Args: zarr_paths={zarr_paths}, zarr_config_url='{args.zarr_config_url}'")
     logger.debug(f"Starting local Zarr concatenation for paths: {zarr_paths}")
     
     # Generate output name
@@ -226,6 +229,7 @@ def convert_zarr_to_cog_local(args, zarr_path: str) -> List[str]:
     """
     Convert Zarr to COG using direct zarr2cog main function call.
     """
+    logger.info(f"CONVERT_ZARR_TO_COG - Args: zarr_path='{zarr_path}', collection_id='{args.collection_id}', output='cog', time='time', latitude='lat', longitude='lon', zarr_access='stage'")
     logger.debug(f"Starting local Zarr to COG conversion for: {zarr_path}")
     
     print(f"Running Zarr to COG conversion")
@@ -265,6 +269,7 @@ def catalog_products_local(args, cog_paths: List[str]):
     Local implementation of product cataloging.
     The zarr2cog.py transformer already creates STAC catalog, so we just need to handle STAC catalog processing.
     """
+    logger.info(f"CATALOG_PRODUCTS - Args: cog_paths={cog_paths}, catalog_file='output/catalog.json'")
     logger.debug(f"Starting local product cataloging for {len(cog_paths)} COG files")
     # Note: args parameter preserved for future use (collection_id, etc.)
     del args  # Suppress unused variable warning for now
@@ -305,6 +310,7 @@ def submit_catalog_job(args):
     Submit a separate MAAP DPS job to handle catalog ingestion to STAC API.
     This job will wait for the current job to complete, then process the catalog.json output.
     """
+    logger.info(f"SUBMIT_CATALOG_JOB - Args: collection_id='{args.collection_id}', maap_host='{args.maap_host}', mmgis_host='{args.mmgis_host}', upsert='{getattr(args, 'upsert', False)}'")
     logger.info("Submitting catalog job to handle STAC API ingestion")
     
     try:
