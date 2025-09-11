@@ -33,6 +33,28 @@ def parse_arguments():
     logger.debug("Starting argument parsing")
     parser = ConfigUtils.get_generic_argument_parser()
     
+    # Add input-netcdf to the existing mutually exclusive input group
+    # Find the mutually exclusive group that contains --granule-id and --input-s3
+    input_group = None
+    for action_group in parser._mutually_exclusive_groups:
+        # Check if this group contains the granule-id or input-s3 arguments
+        group_actions = [action.dest for action in action_group._group_actions]
+        if 'granule_id' in group_actions or 'input_s3' in group_actions:
+            input_group = action_group
+            break
+    
+    if input_group:
+        input_group.add_argument(
+            '--input-netcdf',
+            help='NetCDF file path or URL (local file path, HTTP/HTTPS URL, or S3 URL)'
+        )
+    else:
+        # Fallback: add as regular argument if group not found
+        parser.add_argument(
+            '--input-netcdf',
+            help='NetCDF file path or URL (local file path, HTTP/HTTPS URL, or S3 URL)'
+        )
+    
     # Add step selection parameter
     parser.add_argument(
         '--steps',
@@ -56,13 +78,6 @@ def parse_arguments():
         '--upsert',
         action='store_true',
         help='Enable upsert mode for catalog job (update existing items instead of failing on conflicts)'
-    )
-    
-    # Add input-netcdf parameter for direct NetCDF input
-    parser.add_argument(
-        '--input-netcdf',
-        type=str,
-        help='NetCDF file path or URL (local file path, HTTP/HTTPS URL, or S3 URL)'
     )
     
     args = parser.parse_args()
