@@ -80,6 +80,36 @@ def parse_arguments():
         help='Enable upsert mode for catalog job (update existing items instead of failing on conflicts)'
     )
     
+    # Add concept-id parameter for zarr2cog and catalog operations
+    parser.add_argument(
+        '--concept-id',
+        type=str,
+        required=False,
+        help='Concept ID for zarr2cog and catalog operations (overrides collection-id for these steps)'
+    )
+    
+    # Add coordinate override parameters
+    parser.add_argument(
+        '--time-coord',
+        type=str,
+        default='time',
+        help='Name of the time coordinate (default: time)'
+    )
+    
+    parser.add_argument(
+        '--lat-coord',
+        type=str,
+        default='lat',
+        help='Name of the latitude coordinate (default: lat)'
+    )
+    
+    parser.add_argument(
+        '--lon-coord',
+        type=str,
+        default='lon',
+        help='Name of the longitude coordinate (default: lon)'
+    )
+    
     args = parser.parse_args()
     logger.debug(f"Parsed arguments: {vars(args)}")
     return args
@@ -229,7 +259,15 @@ def convert_zarr_to_cog_local(args, zarr_path: str) -> List[str]:
     """
     Convert Zarr to COG using direct zarr2cog main function call.
     """
-    logger.info(f"CONVERT_ZARR_TO_COG - Args: zarr_path='{zarr_path}', collection_id='{args.collection_id}', output='cog', time='time', latitude='lat', longitude='lon', zarr_access='stage'")
+    # Determine concept_id: use concept_id if provided, otherwise fall back to collection_id
+    concept_id = getattr(args, 'concept_id', None) or args.collection_id
+    
+    # Get coordinate names from args with defaults
+    time_coord = getattr(args, 'time_coord', 'time')
+    lat_coord = getattr(args, 'lat_coord', 'lat') 
+    lon_coord = getattr(args, 'lon_coord', 'lon')
+    
+    logger.info(f"CONVERT_ZARR_TO_COG - Args: zarr_path='{zarr_path}', concept_id='{concept_id}', output='cog', time='{time_coord}', latitude='{lat_coord}', longitude='{lon_coord}', zarr_access='stage'")
     logger.debug(f"Starting local Zarr to COG conversion for: {zarr_path}")
     
     print(f"Running Zarr to COG conversion")
@@ -239,11 +277,11 @@ def convert_zarr_to_cog_local(args, zarr_path: str) -> List[str]:
         class CogArgs:
             def __init__(self):
                 self.zarr = zarr_path
-                self.concept_id = args.collection_id
+                self.concept_id = concept_id
                 self.output = "cog"
-                self.time = "time"
-                self.latitude = "lat"
-                self.longitude = "lon"
+                self.time = time_coord
+                self.latitude = lat_coord
+                self.longitude = lon_coord
                 self.zarr_access = "stage"
         
         cog_args = CogArgs()
@@ -310,7 +348,10 @@ def submit_catalog_job(args):
     Submit a separate MAAP DPS job to handle catalog ingestion to STAC API.
     This job will wait for the current job to complete, then process the catalog.json output.
     """
-    logger.info(f"SUBMIT_CATALOG_JOB - Args: collection_id='{args.collection_id}', maap_host='{args.maap_host}', mmgis_host='{args.mmgis_host}', upsert='{getattr(args, 'upsert', False)}'")
+    # Determine concept_id: use concept_id if provided, otherwise fall back to collection_id
+    concept_id = getattr(args, 'concept_id', None) or args.collection_id
+    
+    logger.info(f"SUBMIT_CATALOG_JOB - Args: concept_id='{concept_id}', collection_id='{args.collection_id}', maap_host='{args.maap_host}', mmgis_host='{args.mmgis_host}', upsert='{getattr(args, 'upsert', False)}'")
     logger.info("Submitting catalog job to handle STAC API ingestion")
     
     try:
@@ -333,7 +374,7 @@ def submit_catalog_job(args):
             "mmgis_host": args.mmgis_host,
             "titiler_token_secret_name": args.titiler_token_secret_name,
             "cmss_logger_host": args.cmss_logger_host,
-            "collection_id": args.collection_id,
+            "collection_id": concept_id,
             "maap_host": args.maap_host
         }
         
@@ -476,15 +517,18 @@ def main():
                     for l in layer_names:
                         asset_uris.append(f"{args.geoserver_host}{GEOSERVER_WORKSPACE}/ows?service=WFS&version=1.0.0&request=GetFeature&typeName={GEOSERVER_WORKSPACE}%3A{l}&outputFormat=application%2Fjson&maxFeatures=10000")
                     
+                    # Determine concept_id: use concept_id if provided, otherwise fall back to collection_id
+                    concept_id = getattr(args, 'concept_id', None) or args.collection_id
+                    
                     product_details = {
-                        "concept_id": args.collection_id,
+                        "concept_id": concept_id,
                         "uris": asset_uris,
                         "job_id": MaapUtils.get_job_id()
                     }
                     
                     logger.debug(f"Product details for notification: {product_details}")
                     LoggingUtils.cmss_product_available(product_details, args.cmss_logger_host)
-                    LoggingUtils.cmss_logger(f"Products available for collection {args.collection_id}", args.cmss_logger_host)
+                    LoggingUtils.cmss_logger(f"Products available for collection {concept_id}", args.cmss_logger_host)
         
         logging.info("Localized pipeline completed successfully!")
         logger.debug("All pipeline steps completed without errors")

@@ -84,6 +84,22 @@ inputs:
     description: Enable upsert mode for catalog job (update existing items instead of failing on conflicts)
     name: upsert
     required: false
+  - default: none
+    description: Concept ID for zarr2cog and catalog operations (overrides collection-id for these steps)
+    name: concept_id
+    required: false
+  - default: "time"
+    description: Name of the time coordinate (default time)
+    name: time_coord
+    required: false
+  - default: "lat"
+    description: Name of the latitude coordinate (default lat)
+    name: lat_coord
+    required: false
+  - default: "lon"
+    description: Name of the longitude coordinate (default lon)
+    name: lon_coord
+    required: false
 queue: maap-dps-czdt-worker-8gb
 repository_url: https://github.com/aist-czdt/czdt-iss-ingest-job.git
 run_command: czdt-iss-ingest-job/.maap/localized-pipeline/run-localized-pipeline.sh
