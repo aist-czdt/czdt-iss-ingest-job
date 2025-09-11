@@ -58,6 +58,13 @@ def parse_arguments():
         help='Enable upsert mode for catalog job (update existing items instead of failing on conflicts)'
     )
     
+    # Add input-netcdf parameter for direct NetCDF input
+    parser.add_argument(
+        '--input-netcdf',
+        type=str,
+        help='NetCDF file path or URL (local file path, HTTP/HTTPS URL, or S3 URL)'
+    )
+    
     args = parser.parse_args()
     logger.debug(f"Parsed arguments: {vars(args)}")
     return args
@@ -71,7 +78,7 @@ def get_enabled_steps(steps_arg: str, input_type: str) -> List[str]:
     if steps_arg == 'all':
         if input_type == "daac":
             return ['stage', 'netcdf2zarr', 'zarr2cog', 'catalog']
-        elif input_type == "s3_netcdf":
+        elif input_type == "s3_netcdf" or input_type == "netcdf":
             return ['netcdf2zarr', 'zarr2cog', 'catalog']
         elif input_type == "s3_zarr":
             return ['zarr2cog', 'catalog']
@@ -116,10 +123,19 @@ def stage_from_daac_local(args, maap) -> str:
     logger.debug(f"DAAC staging completed successfully, local file: {downloaded_file_path}")
     return downloaded_file_path
 
-def convert_netcdf_to_zarr_local(args, input_source: str) -> str:
+def convert_netcdf_to_zarr_local(args) -> str:
     """
     Convert NetCDF to Zarr using direct cf2zarr function call.
+    Automatically detects input source from args.input_netcdf or args.input_s3.
     """
+    # Detect input source
+    if hasattr(args, 'input_netcdf') and args.input_netcdf:
+        input_source = args.input_netcdf
+    elif hasattr(args, 'input_s3') and args.input_s3:
+        input_source = args.input_s3
+    else:
+        raise ValueError("No input source found: neither input_netcdf nor input_s3 specified")
+    
     logger.debug(f"Starting local NetCDF to Zarr conversion for input: {input_source}")
     
     # Prepare output directory
@@ -336,7 +352,12 @@ def main():
         # Note: transformers path validation removed - using direct module imports
         
         # Detect input type and get enabled steps
-        input_type = ConfigUtils.detect_input_type(args)
+        if hasattr(args, 'input_netcdf') and args.input_netcdf:
+            # Use local detection for input_netcdf parameter
+            input_type = "netcdf"  # Treat all input_netcdf as NetCDF type
+        else:
+            # Use existing ConfigUtils detection for other input types
+            input_type = ConfigUtils.detect_input_type(args)
         enabled_steps = get_enabled_steps(args.steps, input_type)
         
         logger.debug(f"Detected input type: {input_type}")
@@ -360,7 +381,9 @@ def main():
                 current_output = stage_from_daac_local(args, maap)
             
             if 'netcdf2zarr' in enabled_steps and current_output:
-                current_output = convert_netcdf_to_zarr_local(args, current_output)
+                # Temporarily set input_netcdf for convert function
+                args.input_netcdf = current_output
+                current_output = convert_netcdf_to_zarr_local(args)
                 
             if 'concat' in enabled_steps and args.enable_concat and current_output:
                 logger.debug("Concatenation enabled, performing Zarr concatenation")
@@ -374,10 +397,10 @@ def main():
             if 'catalog' in enabled_steps:
                 submit_catalog_job(args)
                 
-        elif input_type == "s3_netcdf":
-            # S3 NetCDF pipeline: netcdf2zarr � concat? � zarr2cog � catalog
+        elif input_type == "s3_netcdf" or input_type == "netcdf":
+            # NetCDF pipeline: netcdf2zarr → concat? → zarr2cog → catalog
             if 'netcdf2zarr' in enabled_steps:
-                current_output = convert_netcdf_to_zarr_local(args, args.input_s3)
+                current_output = convert_netcdf_to_zarr_local(args)
                 
             if 'concat' in enabled_steps and args.enable_concat and current_output:
                 logger.debug("Concatenation enabled, performing Zarr concatenation")

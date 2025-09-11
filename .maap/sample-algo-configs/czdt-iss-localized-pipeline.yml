@@ -1,19 +1,23 @@
 algorithm_description: CZDT ISS Localized Pipeline - Runs pipeline steps locally using czdt-iss-transformers instead of MAAP jobs
 algorithm_name: czdt-iss-localized-pipeline
-algorithm_version: main
+algorithm_version: localized-pipeline
 build_command: czdt-iss-ingest-job/.maap/localized-pipeline/build.sh
 disk_space: 50GB
 docker_container_url: mas.maap-project.org/root/maap-workspaces/custom_images/maap_base:v4.2.0
 inputs:
   config: []
-  file: []
+  file: 
+  - default: none
+    description: NetCDF file to process (local file path, HTTP/HTTPS URL, or S3 URL)
+    name: input_netcdf
+    required: false
   positional:
   - default: none
-    description: DAAC Granule ID (mutually exclusive with input_s3)
+    description: DAAC Granule ID (mutually exclusive with input_s3 and input_netcdf)
     name: granule_id
     required: false
   - default: none
-    description: S3 URL of input file - NetCDF or Zarr (mutually exclusive with granule_id)
+    description: S3 URL of input file - NetCDF or Zarr (mutually exclusive with granule_id and input_netcdf)
     name: input_s3
     required: false
   - default: none
