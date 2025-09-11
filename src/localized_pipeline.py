@@ -1,7 +1,6 @@
 import os
 import sys
 import logging
-import subprocess
 from pathlib import Path
 from typing import List
 
@@ -12,16 +11,15 @@ from common_utils import (
     GranuleNotFoundError, DownloadError, UploadError
 )
 from stage_from_daac import search_and_download_granule
-
+import czdt_iss_transformers.cf2zarr as cf2zarr
+import czdt_iss_transformers.zarr_concat as zarr_concat
+import czdt_iss_transformers.zarr2cog as zarr2cog 
 # Configure logging: DEBUG for this module, INFO for dependencies
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-# Path to the czdt-iss-transformers repository (default to parent directory)
-DEFAULT_TRANSFORMERS_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "czdt-iss-transformers")
-TRANSFORMERS_PATH = DEFAULT_TRANSFORMERS_PATH
-TRANSFORMERS_SRC = os.path.join(TRANSFORMERS_PATH, "src")
+# Note: Direct imports of czdt_iss_transformers modules replaced subprocess calls
 
 # Geoserver configuration
 GEOSERVER_WORKSPACE = "czdt"
@@ -43,13 +41,7 @@ def parse_arguments():
         help='Comma-separated list of steps to run: stage,netcdf2zarr,concat,zarr2cog,catalog (default: all)'
     )
     
-    # Add transformers path override
-    parser.add_argument(
-        '--transformers-path',
-        type=str,
-        default=DEFAULT_TRANSFORMERS_PATH,
-        help=f'Path to czdt-iss-transformers repository (default: {DEFAULT_TRANSFORMERS_PATH})'
-    )
+    # Note: transformers-path argument removed - using direct module imports
     
     # Add geoserver host parameter
     parser.add_argument(
@@ -70,24 +62,7 @@ def parse_arguments():
     logger.debug(f"Parsed arguments: {vars(args)}")
     return args
 
-def validate_transformers_path(transformers_path: str) -> bool:
-    """
-    Validate that the transformers path exists and contains required modules.
-    """
-    src_path = os.path.join(transformers_path, "src")
-    required_files = ["cf2zarr.py", "zarr_concat.py", "zarr2cog.py", "util.py"]
-    
-    if not os.path.exists(src_path):
-        logger.error(f"Transformers src directory not found: {src_path}")
-        return False
-    
-    for file in required_files:
-        file_path = os.path.join(src_path, file)
-        if not os.path.exists(file_path):
-            logger.error(f"Required transformer file not found: {file_path}")
-            return False
-    
-    return True
+# Note: validate_transformers_path function removed - using direct module imports
 
 def get_enabled_steps(steps_arg: str, input_type: str) -> List[str]:
     """
@@ -110,24 +85,7 @@ def get_enabled_steps(steps_arg: str, input_type: str) -> List[str]:
             raise ValueError(f"Invalid steps: {invalid_steps}. Valid steps: {valid_steps}")
         return steps
 
-def run_transformer_command(cmd: List[str], description: str) -> subprocess.CompletedProcess:
-    """
-    Run a transformer command and handle logging/errors.
-    """
-    logger.debug(f"Running {description}: {' '.join(cmd)}")
-    msg = f"Running {description}"
-    print(msg)
-    
-    try:
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-        logger.debug(f"{description} completed successfully")
-        logger.debug(f"Command output: {result.stdout}")
-        return result
-    except subprocess.CalledProcessError as e:
-        logger.error(f"{description} failed with exit code {e.returncode}")
-        logger.error(f"Command output: {e.stdout}")
-        logger.error(f"Command error: {e.stderr}")
-        raise RuntimeError(f"{description} failed: {e.stderr}")
+# Note: run_transformer_command function removed - using direct function calls
 
 def stage_from_daac_local(args, maap) -> str:
     """
@@ -158,9 +116,9 @@ def stage_from_daac_local(args, maap) -> str:
     logger.debug(f"DAAC staging completed successfully, local file: {downloaded_file_path}")
     return downloaded_file_path
 
-def convert_netcdf_to_zarr_local(args, input_source: str, transformers_path: str) -> str:
+def convert_netcdf_to_zarr_local(args, input_source: str) -> str:
     """
-    Convert NetCDF to Zarr using local cf2zarr.py transformer.
+    Convert NetCDF to Zarr using direct cf2zarr function call.
     """
     logger.debug(f"Starting local NetCDF to Zarr conversion for input: {input_source}")
     
@@ -168,99 +126,108 @@ def convert_netcdf_to_zarr_local(args, input_source: str, transformers_path: str
     os.makedirs("output", exist_ok=True)
     
     # Generate output name based on input
-    if input_source.startswith('s3://'):
-        filename = os.path.basename(input_source)
-        base_name = os.path.splitext(filename)[0]
-        output_zarr_name = f"{base_name}.zarr"
-    else:
-        # For other inputs, use a generic name
-        output_zarr_name = "converted.zarr"
-    
-    # Build cf2zarr command
-    cf2zarr_script = os.path.join(transformers_path, "src", "cf2zarr.py")
-    cmd = [
-        sys.executable, cf2zarr_script,
-        args.zarr_config_url,  # config file
-        "--input-s3", input_source,
-        "--output", output_zarr_name,
-        "--pattern", "*.nc*",  # Support both .nc and .nc4
-    ]
-    
-    # Add variables if specified
-    if hasattr(args, 'variables') and args.variables:
-        cmd.extend(["--variables"] + args.variables.split(','))
-    
-    # Run the conversion
-    run_transformer_command(cmd, "NetCDF to Zarr conversion")
-    
+    filename = os.path.basename(input_source)
+    base_name = os.path.splitext(filename)[0]
+    output_zarr_name = f"{base_name}.zarr"
     output_path = os.path.join("output", output_zarr_name)
-    logger.debug(f"NetCDF to Zarr conversion completed, output: {output_path}")
-    return output_path
+    
+    print(f"Running NetCDF to Zarr conversion")
+    
+    try:
+        # Prepare variables list
+        variables = None
+        if hasattr(args, 'variables') and args.variables:
+            variables = args.variables.split(',')
+        
+        # Call cf2zarr function directly
+        cf2zarr.convert_cf_to_zarr(
+            config_path=args.zarr_config_url,
+            input_path=input_source,
+            output_path=output_path,
+            pattern="*.nc*",  # Support both .nc and .nc4
+            variables=variables
+        )
+        
+        logger.debug(f"NetCDF to Zarr conversion completed successfully")
+        logger.debug(f"NetCDF to Zarr conversion completed, output: {output_path}")
+        return output_path
+        
+    except Exception as e:
+        logger.error(f"NetCDF to Zarr conversion failed: {e}")
+        raise RuntimeError(f"NetCDF to Zarr conversion failed: {e}")
 
-def concatenate_zarr_local(args, zarr_paths: List[str], transformers_path: str) -> str:
+def concatenate_zarr_local(args, zarr_paths: List[str]) -> str:
     """
-    Concatenate Zarr files using local zarr_concat.py transformer.
+    Concatenate Zarr files using direct zarr_concat main function call.
     """
     logger.debug(f"Starting local Zarr concatenation for paths: {zarr_paths}")
     
     # Generate output name
     output_zarr_name = "concatenated.zarr"
-    
-    # Build zarr_concat command
-    zarr_concat_script = os.path.join(transformers_path, "src", "zarr_concat.py")
-    cmd = [
-        sys.executable, zarr_concat_script,
-        args.zarr_config_url,  # config file
-        "--zarr"
-    ]
-    
-    # Add zarr paths - convert to local paths if needed
-    for zarr_path in zarr_paths:
-        if zarr_path.startswith('/'):
-            cmd.append(zarr_path)  # Local absolute path
-        else:
-            cmd.append(os.path.abspath(zarr_path))  # Make relative paths absolute
-    
-    cmd.extend([
-        "--output", output_zarr_name,
-        "--zarr-access", "stage"
-    ])
-    
-    # Run the concatenation
-    run_transformer_command(cmd, "Zarr concatenation")
-    
     output_path = os.path.join("output", output_zarr_name)
-    logger.debug(f"Zarr concatenation completed, output: {output_path}")
-    return output_path
+    
+    print(f"Running Zarr concatenation")
+    
+    try:
+        # Create argparse-like object for zarr_concat.main()
+        class ConcatArgs:
+            def __init__(self):
+                self.config = args.zarr_config_url
+                self.zarr = [os.path.abspath(p) if not p.startswith('/') else p for p in zarr_paths]
+                self.zarr_manifest = None
+                self.output = output_path
+                self.zarr_access = "stage"
+        
+        concat_args = ConcatArgs()
+        
+        # Call zarr_concat main function directly
+        zarr_concat.main(concat_args)
+        
+        logger.debug(f"Zarr concatenation completed successfully")
+        logger.debug(f"Zarr concatenation completed, output: {output_path}")
+        return output_path
+        
+    except Exception as e:
+        logger.error(f"Zarr concatenation failed: {e}")
+        raise RuntimeError(f"Zarr concatenation failed: {e}")
 
-def convert_zarr_to_cog_local(args, zarr_path: str, transformers_path: str) -> List[str]:
+def convert_zarr_to_cog_local(args, zarr_path: str) -> List[str]:
     """
-    Convert Zarr to COG using local zarr2cog.py transformer.
+    Convert Zarr to COG using direct zarr2cog main function call.
     """
     logger.debug(f"Starting local Zarr to COG conversion for: {zarr_path}")
     
-    # Build zarr2cog command
-    zarr2cog_script = os.path.join(transformers_path, "src", "zarr2cog.py")
-    cmd = [
-        sys.executable, zarr2cog_script,
-        zarr_path,  # zarr input
-        "--concept_id", args.collection_id,
-        "--output", "cog",
-        "--time", "time",
-        "--latitude", "lat", 
-        "--longitude", "lon"
-    ]
+    print(f"Running Zarr to COG conversion")
     
-    # Run the conversion
-    run_transformer_command(cmd, "Zarr to COG conversion")
-    
-    # Find generated COG files
-    output_dir = Path("output")
-    cog_files = list(output_dir.glob("*.tif"))
-    cog_paths = [str(f) for f in cog_files]
-    
-    logger.debug(f"Zarr to COG conversion completed, generated {len(cog_paths)} COG files")
-    return cog_paths
+    try:
+        # Create argparse-like object for zarr2cog.main()
+        class CogArgs:
+            def __init__(self):
+                self.zarr = zarr_path
+                self.concept_id = args.collection_id
+                self.output = "cog"
+                self.time = "time"
+                self.latitude = "lat"
+                self.longitude = "lon"
+                self.zarr_access = "stage"
+        
+        cog_args = CogArgs()
+        
+        # Call zarr2cog main function directly
+        zarr2cog.main(cog_args)
+        
+        # Find generated COG files
+        output_dir = Path("output")
+        cog_files = list(output_dir.glob("*.tif"))
+        cog_paths = [str(f) for f in cog_files]
+        
+        logger.debug(f"Zarr to COG conversion completed successfully")
+        logger.debug(f"Zarr to COG conversion completed, generated {len(cog_paths)} COG files")
+        return cog_paths
+        
+    except Exception as e:
+        logger.error(f"Zarr to COG conversion failed: {e}")
+        raise RuntimeError(f"Zarr to COG conversion failed: {e}")
 
 def catalog_products_local(args, cog_paths: List[str]):
     """
@@ -366,9 +333,7 @@ def main():
         # Validate arguments
         ConfigUtils.validate_arguments(args)
         
-        # Validate transformers path
-        if not validate_transformers_path(args.transformers_path):
-            raise RuntimeError(f"Invalid transformers path: {args.transformers_path}")
+        # Note: transformers path validation removed - using direct module imports
         
         # Detect input type and get enabled steps
         input_type = ConfigUtils.detect_input_type(args)
@@ -395,16 +360,16 @@ def main():
                 current_output = stage_from_daac_local(args, maap)
             
             if 'netcdf2zarr' in enabled_steps and current_output:
-                current_output = convert_netcdf_to_zarr_local(args, current_output, args.transformers_path)
+                current_output = convert_netcdf_to_zarr_local(args, current_output)
                 
             if 'concat' in enabled_steps and args.enable_concat and current_output:
                 logger.debug("Concatenation enabled, performing Zarr concatenation")
-                current_output = concatenate_zarr_local(args, [current_output], args.transformers_path)
+                current_output = concatenate_zarr_local(args, [current_output])
             elif 'concat' in enabled_steps:
                 logger.debug("Concatenation requested but conditions not met, skipping")
                 
             if 'zarr2cog' in enabled_steps and current_output:
-                cog_paths = convert_zarr_to_cog_local(args, current_output, args.transformers_path)
+                cog_paths = convert_zarr_to_cog_local(args, current_output)
                 
             if 'catalog' in enabled_steps:
                 submit_catalog_job(args)
@@ -412,16 +377,16 @@ def main():
         elif input_type == "s3_netcdf":
             # S3 NetCDF pipeline: netcdf2zarr � concat? � zarr2cog � catalog
             if 'netcdf2zarr' in enabled_steps:
-                current_output = convert_netcdf_to_zarr_local(args, args.input_s3, args.transformers_path)
+                current_output = convert_netcdf_to_zarr_local(args, args.input_s3)
                 
             if 'concat' in enabled_steps and args.enable_concat and current_output:
                 logger.debug("Concatenation enabled, performing Zarr concatenation")
-                current_output = concatenate_zarr_local(args, [current_output], args.transformers_path)
+                current_output = concatenate_zarr_local(args, [current_output])
             elif 'concat' in enabled_steps:
                 logger.debug("Concatenation requested but conditions not met, skipping")
                 
             if 'zarr2cog' in enabled_steps and current_output:
-                cog_paths = convert_zarr_to_cog_local(args, current_output, args.transformers_path)
+                cog_paths = convert_zarr_to_cog_local(args, current_output)
                 
             if 'catalog' in enabled_steps:
                 submit_catalog_job(args)
@@ -429,7 +394,7 @@ def main():
         elif input_type == "s3_zarr":
             # S3 Zarr pipeline: zarr2cog � catalog
             if 'zarr2cog' in enabled_steps:
-                cog_paths = convert_zarr_to_cog_local(args, args.input_s3, args.transformers_path)
+                cog_paths = convert_zarr_to_cog_local(args, args.input_s3)
                 
             if 'catalog' in enabled_steps:
                 submit_catalog_job(args)
