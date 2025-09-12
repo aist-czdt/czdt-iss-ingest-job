@@ -63,9 +63,8 @@ def run_cbefs_preprocessor(args):
         os.makedirs("output", exist_ok=True)
         
         # Download S3 file to local input directory
-        aws_region_for_s3 = os.environ.get('AWS_REGION', 'us-west-2')
-        s3_client = AWSUtils.get_s3_client(role_arn=args.role_arn, aws_region=aws_region_for_s3)
         bucket_name, s3_path = AWSUtils.parse_s3_path(args.input_s3)
+        s3_client = AWSUtils.get_s3_client(role_arn=args.role_arn, bucket_name=bucket_name)
         
         # Get filename from S3 path
         input_filename = os.path.basename(s3_path)

@@ -428,9 +428,8 @@ async def main():
             # S3 GeoPackage → Upload 
             logger.debug("Starting S3 GeoPackage pipeline: catalog")
 
-            aws_region_for_s3 = os.environ.get('AWS_REGION', 'us-west-2')
-            s3_client = AWSUtils.get_s3_client(role_arn=args.role_arn, aws_region=aws_region_for_s3)
-            bucket_name, gpkg_path = AWSUtils.parse_s3_path(args.input_s3)    
+            bucket_name, gpkg_path = AWSUtils.parse_s3_path(args.input_s3)
+            s3_client = AWSUtils.get_s3_client(role_arn=args.role_arn, bucket_name=bucket_name)    
 
             # Download the file
             file_name = os.path.basename(gpkg_path)

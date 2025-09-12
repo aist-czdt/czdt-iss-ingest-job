@@ -175,10 +175,8 @@ def main():
             args.local_download_path
         )
 
-        # Step 3: Get S3 client (with optional role assumption)
-        # Determine AWS region (can be None to use default configured for boto3)
-        aws_region_for_s3 = os.environ.get('AWS_REGION', 'us-west-2')  # Or get from args if you add it
-        s3_client = AWSUtils.get_s3_client(role_arn=args.role_arn, aws_region=aws_region_for_s3)
+        # Step 3: Get S3 client (with optional role assumption and region detection)
+        s3_client = AWSUtils.get_s3_client(role_arn=args.role_arn, bucket_name=args.s3_bucket)
 
         # Step 4: Upload the downloaded granule to S3
         upload_to_s3(

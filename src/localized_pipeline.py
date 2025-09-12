@@ -493,9 +493,8 @@ def main():
                 if not args.geoserver_host:
                     raise ValueError("--geoserver-host is required for GeoPackage processing")
                 
-                aws_region_for_s3 = os.environ.get('AWS_REGION', 'us-west-2')
-                s3_client = AWSUtils.get_s3_client(role_arn=args.role_arn, aws_region=aws_region_for_s3)
                 bucket_name, gpkg_path = AWSUtils.parse_s3_path(args.input_s3)
+                s3_client = AWSUtils.get_s3_client(role_arn=args.role_arn, bucket_name=bucket_name)
                 
                 # Download the file
                 os.makedirs("output", exist_ok=True)
