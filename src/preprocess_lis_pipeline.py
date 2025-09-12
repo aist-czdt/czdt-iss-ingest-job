@@ -30,9 +30,10 @@ def parse_arguments():
     # The --input-s3 argument is already defined in the generic parser
     # No need to redefine it here
     
-    args = parser.parse_args()
+    args, unknown_args = parser.parse_known_args()
     logger.debug(f"Parsed arguments: {vars(args)}")
-    return args
+    logger.debug(f"Unknown arguments: {unknown_args}")
+    return args, unknown_args
 
 def run_lis_preprocessor(args) -> str:
     """
@@ -78,7 +79,7 @@ def run_lis_preprocessor(args) -> str:
         logger.error(f"LIS preprocessing failed: {e}")
         raise RuntimeError(f"LIS preprocessing failed: {e}")
 
-def run_localized_pipeline(preprocessed_file: str, original_args):
+def run_localized_pipeline(preprocessed_file: str, original_args, unknown_args=None):
     """
     Run the main localized pipeline with the preprocessed file.
     """
@@ -105,6 +106,11 @@ def run_localized_pipeline(preprocessed_file: str, original_args):
     if hasattr(original_args, 'variables') and original_args.variables:
         cmd.extend(['--variables', original_args.variables])
     
+    # Pass through any unknown arguments to the localized pipeline
+    if unknown_args:
+        cmd.extend(unknown_args)
+        logger.debug(f"Passing through unknown arguments: {unknown_args}")
+    
     logger.debug(f"Running command: {' '.join(cmd)}")
     
     try:
@@ -122,7 +128,7 @@ def main():
     Main function orchestrating the LIS preprocessing pipeline.
     """
     logger.debug("Starting LIS preprocessing pipeline main function")
-    args = parse_arguments()
+    args, unknown_args = parse_arguments()
     
     try:
         # Validate arguments
@@ -134,7 +140,7 @@ def main():
         preprocessed_file = run_lis_preprocessor(args)
         
         # Step 2: Run the main localized pipeline with the preprocessed file
-        run_localized_pipeline(preprocessed_file, args)
+        run_localized_pipeline(preprocessed_file, args, unknown_args)
         
         logging.info("LIS preprocessing pipeline completed successfully!")
         logger.debug("All pipeline steps completed without errors")
