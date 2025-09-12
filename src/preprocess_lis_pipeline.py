@@ -87,16 +87,26 @@ def run_localized_pipeline(preprocessed_file: str, original_args, unknown_args=N
     
     # Build command for localized pipeline
     pipeline_script = os.path.join(os.path.dirname(__file__), 'localized_pipeline.py')
-    cmd = [
-        sys.executable, pipeline_script,
-        '--input-netcdf', preprocessed_file,
-        '--collection-id', original_args.collection_id,
-        '--zarr-config-url', original_args.zarr_config_url,
-        '--maap-host', original_args.maap_host,
-        '--mmgis-host', original_args.mmgis_host,
-        '--titiler-token-secret-name', original_args.titiler_token_secret_name,
-        '--cmss-logger-host', original_args.cmss_logger_host,
-    ]
+    cmd = [sys.executable, pipeline_script, '--input-netcdf', preprocessed_file]
+    
+    # Add required arguments only if they exist and are not None
+    if hasattr(original_args, 'collection_id') and original_args.collection_id:
+        cmd.extend(['--collection-id', original_args.collection_id])
+    
+    if hasattr(original_args, 'zarr_config_url') and original_args.zarr_config_url:
+        cmd.extend(['--zarr-config-url', original_args.zarr_config_url])
+    
+    if hasattr(original_args, 'maap_host') and original_args.maap_host:
+        cmd.extend(['--maap-host', original_args.maap_host])
+    
+    if hasattr(original_args, 'mmgis_host') and original_args.mmgis_host:
+        cmd.extend(['--mmgis-host', original_args.mmgis_host])
+    
+    if hasattr(original_args, 'titiler_token_secret_name') and original_args.titiler_token_secret_name:
+        cmd.extend(['--titiler-token-secret-name', original_args.titiler_token_secret_name])
+    
+    if hasattr(original_args, 'cmss_logger_host') and original_args.cmss_logger_host:
+        cmd.extend(['--cmss-logger-host', original_args.cmss_logger_host])
     
     # Add role-arn if provided
     if hasattr(original_args, 'role_arn') and original_args.role_arn:
