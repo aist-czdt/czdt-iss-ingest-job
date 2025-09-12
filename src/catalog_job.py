@@ -140,7 +140,7 @@ def wait_for_parent_completion(parent_job):
         logger.debug(f'Parent job {parent_job.id} status is {status}. Backing off.')
         raise RuntimeError(f"Job still running: {status}")
     
-    if status == "successful":
+    if status == "succeeded":
         logger.info(f"Parent job {parent_job.id} completed successfully")
         return parent_job
     
