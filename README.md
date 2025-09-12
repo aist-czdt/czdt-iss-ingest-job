@@ -4,12 +4,16 @@ A comprehensive data ingestion and processing pipeline for NASA MAAP platform th
 
 ## Overview
 
-This project provides two main pipeline workflows for processing geospatial data:
+This project provides multiple pipeline workflows for processing geospatial data:
 
 1. **DAAC Pipeline** (`pipeline_daac.py`) - Complete end-to-end ingestion from NASA DAAC archives
 2. **NetCDF Pipeline** (`pipeline_netcdf.py`) - Direct processing of NetCDF files from S3 URLs
+3. **Localized Pipeline** (`localized_pipeline.py`) - Streamlined local execution for various input types
+4. **Preprocessing Pipelines** - Data-specific preprocessing followed by full pipeline:
+   - **LIS Preprocessing Pipeline** (`preprocess_lis_pipeline.py`) - LIS data preprocessing + processing
+   - **CBEFS Preprocessing Pipeline** (`preprocess_cbefs_pipeline.py`) - CBEFS data preprocessing + processing
 
-Both pipelines transform NetCDF data through Zarr intermediate format to COGs and catalog the results using STAC standards.
+All pipelines transform input data through optimized processing workflows to COGs and catalog the results using STAC standards.
 
 ## Pipeline Architecture
 
@@ -79,6 +83,75 @@ python src/pipeline_netcdf.py \
 - `--input-s3-url`: S3 URL of the input NetCDF file to process
 - `--variables`: Space-separated list of variables to extract (optional)
 
+### Localized Pipeline
+
+Process various input types with streamlined local execution:
+
+```bash
+python src/localized_pipeline.py \
+  --input-netcdf "path/to/file.nc" \
+  --collection-id "C123456789-MAAP" \
+  --zarr-config-url "s3://config-bucket/zarr-config.yaml" \
+  --maap-host "https://maap.example.com" \
+  --mmgis-host "https://mmgis.example.com" \
+  --titiler-token-secret-name "mmgis-token" \
+  --cmss-logger-host "https://logger.example.com"
+```
+
+**Input Options:**
+- `--granule-id` + `--collection-id`: DAAC granule processing
+- `--input-s3`: S3 NetCDF/Zarr/GeoPackage file processing  
+- `--input-netcdf`: Local NetCDF file processing
+
+### Preprocessing Pipelines
+
+#### LIS Data Preprocessing
+
+Process Land Information System (LIS) data with coordinate transformations:
+
+```bash
+python src/preprocess_lis_pipeline.py \
+  --input-s3 "s3://bucket/lis_data.nc" \
+  --collection-id "C123456789-LIS" \
+  --zarr-config-url "s3://config-bucket/lis-zarr-config.yaml" \
+  --maap-host "https://maap.example.com" \
+  --mmgis-host "https://mmgis.example.com" \
+  --titiler-token-secret-name "mmgis-token" \
+  --cmss-logger-host "https://logger.example.com"
+```
+
+**LIS-Specific Processing:**
+- Downloads raw LIS NetCDF from S3
+- Applies coordinate transformations and variable restructuring
+- Runs full localized pipeline on preprocessed data
+
+#### CBEFS Data Preprocessing
+
+Process Chesapeake Bay Environmental Forecast System (CBEFS) data with regridding:
+
+```bash
+python src/preprocess_cbefs_pipeline.py \
+  --input-s3 "s3://bucket/cbefs_data.nc" \
+  --collection-id "C123456789-CBEFS" \
+  --resolution 0.005 \
+  --variables "oxygen,salt,temp" \
+  --zarr-config-url "s3://config-bucket/cbefs-zarr-config.yaml" \
+  --maap-host "https://maap.example.com" \
+  --mmgis-host "https://mmgis.example.com" \
+  --titiler-token-secret-name "mmgis-token" \
+  --cmss-logger-host "https://logger.example.com"
+```
+
+**CBEFS-Specific Processing:**
+- Downloads raw CBEFS NetCDF from S3
+- Performs curvilinear to WGS84 regridding at specified resolution
+- Splits temporal data into separate files for processing
+- Runs full localized pipeline on preprocessed data
+
+**CBEFS Parameters:**
+- `--resolution`: Grid resolution for regridding (default: 0.005)
+- `--variables`: Comma-separated list of variables to process (default: oxygen,salt)
+
 ### Environment Setup
 
 ```bash
@@ -92,21 +165,33 @@ conda activate ingest
 
 ## Key Features
 
-- **Multi-source Ingestion**: Support for DAAC archives and direct S3 files
+- **Multi-source Ingestion**: Support for DAAC archives, direct S3 files, and local files
+- **Data-Specific Preprocessing**: Built-in support for LIS and CBEFS data transformations
 - **Asynchronous Processing**: Handles large datasets with job queue management
 - **Format Conversion**: NetCDF → Zarr → COG transformation pipeline
 - **Cloud Optimization**: Generates COGs with proper overviews and compression
 - **STAC Compliance**: Creates discoverable metadata following OGC standards
 - **AWS Integration**: Full S3 integration with role-based access
+- **Modular Architecture**: Reusable components and preprocessing pipelines
 - **Error Handling**: Comprehensive logging and error recovery
 
 ## Output Products
 
-Both pipelines generate:
+All pipelines generate:
 - **Cloud Optimized GeoTIFFs (.tif)** - Analysis-ready raster data
 - **Zarr Files (.zarr)** - Intermediate chunked array format
 - **STAC Items** - Standardized metadata for discovery
 - **Product Notifications** - Automated cataloging to MMGIS/STAC services
+
+## MAAP Platform Deployment
+
+For deployment on the MAAP platform, create separate algorithm configurations:
+
+- **`czdt-iss-ingest-job`** - Standard localized pipeline
+- **`czdt-iss-preprocess-lis`** - LIS preprocessing + full pipeline  
+- **`czdt-iss-preprocess-cbefs`** - CBEFS preprocessing + full pipeline
+
+Each algorithm runs as a self-contained job that includes preprocessing (if needed) followed by the complete data processing pipeline.
 
 The final product details include URIs for both COG and Zarr outputs for maximum flexibility in downstream applications.
 
