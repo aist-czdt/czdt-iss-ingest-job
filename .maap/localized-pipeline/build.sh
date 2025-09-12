@@ -33,4 +33,6 @@ conda env update -n ingest --file environment.yaml
 conda run -n ingest pip install -e .
 popd
 
+# For input parsing
+conda run -n ingest pip install jq
 echo "Build complete!"
