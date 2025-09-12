@@ -15,7 +15,7 @@ import czdt_iss_transformers.cf2zarr as cf2zarr
 import czdt_iss_transformers.zarr_concat as zarr_concat
 import czdt_iss_transformers.zarr2cog as zarr2cog 
 # Configure logging: DEBUG for this module, INFO for dependencies
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
@@ -368,7 +368,7 @@ def submit_catalog_job(args):
         job_params = {
             "identifier": f"Catalog_Job_for_{current_job_id}",
             "algo_id": "czdt-iss-catalog-job",
-            "version": "main",
+            "version": "catalog-job",
             "queue": "maap-dps-czdt-worker-8gb",
             "parent_job_id": current_job_id,
             "mmgis_host": args.mmgis_host,
