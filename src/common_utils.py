@@ -22,17 +22,52 @@ class AWSUtils:
     """AWS-related utility functions for S3 operations and client management."""
     
     @staticmethod
-    def get_s3_client(role_arn: str = None, aws_region: str = None):
+    def get_bucket_region(bucket_name: str, s3_client=None) -> Optional[str]:
         """
-        Create and return an S3 client with optional role assumption.
+        Detect the region of an S3 bucket using head_bucket operation.
+        
+        Args:
+            bucket_name: S3 bucket name
+            s3_client: Optional existing S3 client (region-agnostic)
+            
+        Returns:
+            AWS region name or None if detection fails
+        """
+        if not s3_client:
+            # Create region-agnostic client for region detection
+            s3_client = boto3.client('s3')
+        
+        try:
+            response = s3_client.head_bucket(Bucket=bucket_name)
+            # Region is returned in the response headers
+            region = response['ResponseMetadata']['HTTPHeaders'].get('x-amz-bucket-region')
+            if region:
+                logging.debug(f"Detected bucket {bucket_name} in region: {region}")
+                return region
+        except ClientError as e:
+            logging.warning(f"Failed to detect region for bucket {bucket_name}: {e}")
+        
+        return None
+
+    @staticmethod
+    def get_s3_client(role_arn: str = None, aws_region: str = None, bucket_name: str = None):
+        """
+        Create and return an S3 client with optional role assumption and dynamic region detection.
         
         Args:
             role_arn: Optional ARN of the role to assume
-            aws_region: AWS region for the client
+            aws_region: AWS region for the client (optional)
+            bucket_name: Optional bucket name for automatic region detection
             
         Returns:
             boto3 S3 client instance
         """
+        # If no region specified but bucket name provided, try to detect region
+        if not aws_region and bucket_name:
+            aws_region = AWSUtils.get_bucket_region(bucket_name)
+            if aws_region:
+                logging.info(f"Auto-detected region {aws_region} for bucket {bucket_name}")
+        
         if role_arn:
             try:
                 sts_client = boto3.client('sts')
@@ -99,7 +134,7 @@ class AWSUtils:
     @staticmethod
     def upload_to_s3(file_path: str, bucket: str, key: str, s3_client=None, role_arn: str = None) -> str:
         """
-        Upload a file to S3 with error handling.
+        Upload a file to S3 with error handling and automatic region detection.
         
         Args:
             file_path: Local file path to upload
@@ -118,7 +153,7 @@ class AWSUtils:
             raise FileNotFoundError(f"File not found: {file_path}")
         
         if not s3_client:
-            s3_client = AWSUtils.get_s3_client(role_arn=role_arn)
+            s3_client = AWSUtils.get_s3_client(role_arn=role_arn, bucket_name=bucket)
         
         try:
             logging.info(f"Uploading {file_path} to s3://{bucket}/{key}")
@@ -145,7 +180,8 @@ class AWSUtils:
         """
         
         if not s3_client:
-            s3_client = AWSUtils.get_s3_client(role_arn=role_arn)
+            # Try to detect region from source bucket for optimal performance
+            s3_client = AWSUtils.get_s3_client(role_arn=role_arn, bucket_name=source_bucket)
 
         # List objects in the source "folder"
         objects_to_copy = []
@@ -191,6 +227,7 @@ class AWSUtils:
             True if file exists, False otherwise
         """
         if not s3_client:
+            # Create region-agnostic client for basic operations
             s3_client = boto3.client('s3')
         
         try:
@@ -313,6 +350,7 @@ class MaapUtils:
         Returns:
             List of S3 paths or prefixes
         """
+        # Use region-agnostic S3 resource for cross-region compatibility
         s3 = boto3.resource('s3')
         output = set()
         job_outputs = [next((path for path in j.retrieve_result() if path.startswith("s3")), None) for j in jobs]
