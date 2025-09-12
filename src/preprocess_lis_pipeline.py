@@ -89,32 +89,35 @@ def run_localized_pipeline(preprocessed_file: str, original_args, unknown_args=N
     pipeline_script = os.path.join(os.path.dirname(__file__), 'localized_pipeline.py')
     cmd = [sys.executable, pipeline_script, '--input-netcdf', preprocessed_file]
     
-    # Add required arguments only if they exist and are not None
-    if hasattr(original_args, 'collection_id') and original_args.collection_id:
-        cmd.extend(['--collection-id', original_args.collection_id])
+    # Add all required arguments - these must be present for localized pipeline to work
+    required_args = [
+        ('s3_bucket', '--s3-bucket'),
+        ('role_arn', '--role-arn'),
+        ('zarr_config_url', '--zarr-config-url'),
+        ('maap_host', '--maap-host'),
+        ('mmgis_host', '--mmgis-host'),
+        ('titiler_token_secret_name', '--titiler-token-secret-name'),
+        ('cmss_logger_host', '--cmss-logger-host'),
+        ('job_queue', '--job-queue')
+    ]
     
-    if hasattr(original_args, 'zarr_config_url') and original_args.zarr_config_url:
-        cmd.extend(['--zarr-config-url', original_args.zarr_config_url])
+    for attr_name, arg_name in required_args:
+        if hasattr(original_args, attr_name) and getattr(original_args, attr_name):
+            cmd.extend([arg_name, getattr(original_args, attr_name)])
+        else:
+            logger.warning(f"Required argument {arg_name} is missing or None")
     
-    if hasattr(original_args, 'maap_host') and original_args.maap_host:
-        cmd.extend(['--maap-host', original_args.maap_host])
+    # Add optional arguments if provided
+    optional_args = [
+        ('collection_id', '--collection-id'),
+        ('variables', '--variables'),
+        ('s3_prefix', '--s3-prefix'),
+        ('local_download_path', '--local-download-path')
+    ]
     
-    if hasattr(original_args, 'mmgis_host') and original_args.mmgis_host:
-        cmd.extend(['--mmgis-host', original_args.mmgis_host])
-    
-    if hasattr(original_args, 'titiler_token_secret_name') and original_args.titiler_token_secret_name:
-        cmd.extend(['--titiler-token-secret-name', original_args.titiler_token_secret_name])
-    
-    if hasattr(original_args, 'cmss_logger_host') and original_args.cmss_logger_host:
-        cmd.extend(['--cmss-logger-host', original_args.cmss_logger_host])
-    
-    # Add role-arn if provided
-    if hasattr(original_args, 'role_arn') and original_args.role_arn:
-        cmd.extend(['--role-arn', original_args.role_arn])
-    
-    # Add variables if provided
-    if hasattr(original_args, 'variables') and original_args.variables:
-        cmd.extend(['--variables', original_args.variables])
+    for attr_name, arg_name in optional_args:
+        if hasattr(original_args, attr_name) and getattr(original_args, attr_name):
+            cmd.extend([arg_name, getattr(original_args, attr_name)])
     
     # Pass through any unknown arguments to the localized pipeline
     if unknown_args:
