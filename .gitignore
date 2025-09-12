@@ -5,3 +5,5 @@
 .vscode/
 src/__pycache__/
 test/test-files/output
+src/update_stac_hrefs.py
+src/ingest-stac.py
