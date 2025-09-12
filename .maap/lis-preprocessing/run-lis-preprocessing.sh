@@ -8,7 +8,7 @@ basedir=$( cd "$(dirname "$0")" ; pwd -P )
 root_dir=$(dirname $(dirname "${basedir}"))
 
 echo "Running LIS preprocessing pipeline..."
-
+source activate ingest
 # Check if _job.json exists
 if [[ ! -f "_job.json" ]]; then
     echo "ERROR: _job.json file not found"
