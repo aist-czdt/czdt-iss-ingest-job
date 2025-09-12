@@ -27,12 +27,8 @@ def parse_arguments():
     logger.debug("Starting argument parsing")
     parser = ConfigUtils.get_generic_argument_parser()
     
-    # Override the input group to only accept input-s3 for preprocessing
-    parser.add_argument(
-        '--input-s3',
-        required=True,
-        help='S3 path to raw LIS NetCDF file for preprocessing'
-    )
+    # The --input-s3 argument is already defined in the generic parser
+    # No need to redefine it here
     
     args = parser.parse_args()
     logger.debug(f"Parsed arguments: {vars(args)}")
