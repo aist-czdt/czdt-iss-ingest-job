@@ -74,7 +74,7 @@ def run_cbefs_preprocessor(args):
         s3_client.download_file(bucket_name, s3_path, local_input_path)
         
         # Import and run CBEFS preprocessor
-        from czdt_iss_transformers.preprocessors.cbefs.src.cbefs_preprocessor import main as cbefs_main
+        from czdt_iss_transformers.preprocessors.cbefs.cbefs_preprocessor import main as cbefs_main
         
         # Create args object for CBEFS preprocessor
         class CBEFSArgs:

@@ -65,7 +65,7 @@ def run_lis_preprocessor(args) -> str:
         s3_client.download_file(bucket_name, s3_path, local_input_path)
         
         # Import and run LIS preprocessor
-        from czdt_iss_transformers.preprocessors.lis.src.lis_preprocessor import preprocess_lis_data
+        from czdt_iss_transformers.preprocessors.lis.lis_preprocessor import preprocess_lis_data
         
         # Generate output filename
         base_name = os.path.splitext(input_filename)[0]
