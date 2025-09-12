@@ -212,7 +212,7 @@ def get_catalog_from_parent_job(parent_job, maap_host: str) -> Dict[str, Any]:
             fr.write(json.dumps(catalog_data, indent=4))
         
         logger.info(f"Successfully downloaded catalog with {len(catalog_data.get('links', []))} links")
-        return catalog_data
+        return catalog_data, presigned_url
         
     except Exception as e:
         logger.error(f"Failed to get catalog from parent job {parent_job.id}: {e}")
@@ -406,11 +406,11 @@ def main():
         LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host)
         
         # Get catalog from parent job outputs
-        catalog_data = get_catalog_from_parent_job(completed_job, args.maap_host)
+        catalog_data, presigned_url = get_catalog_from_parent_job(completed_job, args.maap_host)
         
         # Create PySTAC catalog object
         catalog = pystac.Catalog.from_dict(catalog_data)
-        catalog.set_self_href(f"s3://temp-catalog-{args.parent_job_id}.json")
+        catalog.set_self_href(presigned_url)
         catalog.make_all_asset_hrefs_absolute()
         
         logger.info(f"Created PySTAC catalog: '{catalog.id}' - {catalog.description}")
