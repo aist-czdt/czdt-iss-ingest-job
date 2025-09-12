@@ -29,7 +29,7 @@ popd
 # Install transformers dependencies
 echo "Installing transformers dependencies..."
 pushd "${TRANSFORMERS_DIR}"
-conda env update -n ingest --file environment.yml
+conda env update -n ingest --file environment.yaml
 conda run -n ingest pip install -e .
 popd
 
