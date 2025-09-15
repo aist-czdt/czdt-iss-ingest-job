@@ -1,6 +1,7 @@
 import os
 import sys
 import logging
+import datetime
 from pathlib import Path
 from typing import List
 
@@ -499,7 +500,8 @@ def main():
                 # Download the file
                 os.makedirs("output", exist_ok=True)
                 file_name = os.path.basename(gpkg_path)
-                local_file_path = f"output/{file_name}"
+                
+                local_file_path = f"output/ondemand_{datetime.now().strftime("%Y%m%d%H%M%S")}_{file_name}"
                 s3_client.download_file(bucket_name, gpkg_path, local_file_path)
                 
                 print(f"File '{gpkg_path}' downloaded successfully to '{local_file_path}'")
@@ -528,6 +530,8 @@ def main():
                     logger.debug(f"Product details for notification: {product_details}")
                     LoggingUtils.cmss_product_available(product_details, args.cmss_logger_host)
                     LoggingUtils.cmss_logger(f"Products available for collection {concept_id}", args.cmss_logger_host)
+                else:
+                    raise RuntimeError("Geoserver upload failed")
         
         logging.info("Localized pipeline completed successfully!")
         logger.debug("All pipeline steps completed without errors")
