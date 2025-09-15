@@ -501,7 +501,7 @@ def main():
                 os.makedirs("output", exist_ok=True)
                 file_name = os.path.basename(gpkg_path)
                 
-                local_file_path = f"output/ondemand_{datetime.now().strftime("%Y%m%d%H%M%S")}_{file_name}"
+                local_file_path = f"output/ondemand_{datetime.datetime.now().strftime("%Y%m%d%H%M%S")}_{file_name}"
                 s3_client.download_file(bucket_name, gpkg_path, local_file_path)
                 
                 print(f"File '{gpkg_path}' downloaded successfully to '{local_file_path}'")
