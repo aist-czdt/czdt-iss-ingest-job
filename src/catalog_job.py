@@ -430,7 +430,7 @@ def main():
             token=auth_token,
             collection_id=args.collection_id,
             cmss_logger_host=args.cmss_logger_host,
-            parent_job_id=args.parent_job_id
+            parent_job_id=args.parent_job_id,
             upsert_mode=args.upsert
         )
         
