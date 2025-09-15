@@ -10,7 +10,7 @@ root_dir=$(dirname $(dirname "${basedir}"))
 echo "Running localized pipeline..."
 
 # Activate conda environment
-conda activate ingest
+source activate ingest
 
 # Check if _job.json exists
 if [[ ! -f "_job.json" ]]; then
