@@ -114,7 +114,7 @@ Examples:
     return parser.parse_args()
 
 
-@backoff.on_exception(backoff.expo, Exception, max_value=64, max_time=172800)
+@backoff.on_exception(backoff.expo, RuntimeError, max_value=64, max_time=172800)
 def wait_for_parent_completion(parent_job):
     """
     Wait for parent job to complete with exponential backoff.
@@ -146,7 +146,7 @@ def wait_for_parent_completion(parent_job):
     
     # Unknown status - log and retry
     logger.warning(f"Unknown parent job status: {status}. Will retry.")
-    raise RuntimeError(f"Unknown job status: {status}")
+    raise ValueError(f"Unknown job status: {status}")
 
 
 def get_authentication_token(token_secret_name: str, maap_host: str) -> str:
