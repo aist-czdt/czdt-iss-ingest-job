@@ -266,7 +266,7 @@ def process_catalog_items(catalog: pystac.Catalog) -> Dict[str, int]:
 
 def ingest_catalog_to_stac(catalog: pystac.Catalog, mmgis_host: str, token: str, 
                           collection_id: str, cmss_logger_host: str, 
-                          upsert_mode: bool = False) -> Dict[str, Any]:
+                          parent_job_id: str, upsert_mode: bool = False) -> Dict[str, Any]:
     """
     Ingest all collections and items from catalog into STAC API.
     
@@ -276,6 +276,7 @@ def ingest_catalog_to_stac(catalog: pystac.Catalog, mmgis_host: str, token: str,
         token: Authentication token
         collection_id: Collection concept ID for notifications
         cmss_logger_host: CMSS logging host
+        parent_job_id: Parent DPS job id
         upsert_mode: Whether to use upsert mode for existing items
         
     Returns:
@@ -341,12 +342,11 @@ def ingest_catalog_to_stac(catalog: pystac.Catalog, mmgis_host: str, token: str,
                     failed_collections.append(collection_id_current)
     
     # Send product availability notification
-    job_id = MaapUtils.get_job_id()
     product_details = {
         "concept_id": collection_id,
         "ogc": ogc_uris,
         "uris": asset_uris,
-        "job_id": job_id
+        "job_id": parent_job_id
     }
     
     logger.debug(f"Product details for notification: {product_details}")
@@ -430,6 +430,7 @@ def main():
             token=auth_token,
             collection_id=args.collection_id,
             cmss_logger_host=args.cmss_logger_host,
+            parent_job_id=args.parent_job_id
             upsert_mode=args.upsert
         )
         
