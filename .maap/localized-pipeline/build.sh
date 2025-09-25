@@ -12,6 +12,9 @@ if [ ! -d "${TRANSFORMERS_DIR}" ]; then
     echo "Cloning czdt-iss-transformers repository..."
     pushd "${root_dir}"
     git clone --single-branch --branch localized-pipeline https://github.com/aist-czdt/czdt-iss-transformers.git
+    pushd czdt-iss-transformers
+    echo "$(git log -1)"
+    popd
     popd
 else
     echo "czdt-iss-transformers repository already exists, pulling latest changes..."
