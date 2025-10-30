@@ -28,6 +28,7 @@ role_arn=$(jq -r '.params.role_arn // empty' _job.json)
 cmss_logger_host=$(jq -r '.params.cmss_logger_host // empty' _job.json)
 mmgis_host=$(jq -r '.params.mmgis_host // empty' _job.json)
 titiler_token_secret_name=$(jq -r '.params.titiler_token_secret_name // empty' _job.json)
+zarr_config_url=$(jq -r '.params.zarr_config_url // empty' _job.json)
 gridding_config_url=$(jq -r '.params.gridding_config_url // empty' _job.json)
 # Mapped from gridding_config_url
 config=$(jq -r '.params.gridding_config_url // empty' _job.json)
@@ -101,6 +102,9 @@ if [[ -n "${mmgis_host}" ]]; then
 fi
 if [[ -n "${titiler_token_secret_name}" ]]; then
     args+=(--titiler-token-secret-name "${titiler_token_secret_name}")
+fi
+if [[ -n "${zarr_config_url}" ]]; then
+    args+=(--zarr-config-url "${zarr_config_url}")
 fi
 if [[ -n "${gridding_config_url}" ]]; then
     args+=(--gridding-config-url "${gridding_config_url}")

@@ -321,6 +321,8 @@ def main():
             maap = MaapUtils.get_maap_instance(maap_host_to_use)
             current_output = stage_from_daac_local(args, maap)     
             logger.debug(f"DAAC input: {current_output}")
+            args.input_url = current_output 
+            logger.debug(f"args.input_url: {args.input_url}")
         
         logging.info("Processing Gridding input with preprocessing followed by full pipeline")
         
