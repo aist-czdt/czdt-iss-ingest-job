@@ -212,7 +212,58 @@ class AWSUtils:
                 logging.info(f"Successfully copied: {object_key} to {destination_bucket}/{new_object_key}")
             except Exception as e:
                 logging.error(f"Error copying {source_bucket}/{object_key} to {destination_bucket}/{new_object_key}: {e}")
-    
+
+    @staticmethod
+    def download_s3_prefix(bucket_name: str, prefix: str, local_dir: str, s3_client=None, role_arn: str = None):
+        """
+        Download all files from an S3 prefix to a local directory.
+
+        Args:
+            bucket_name (str): Name of the S3 bucket.
+            prefix (str): The prefix (folder path) in the bucket to copy from.
+            local_dir (str): The local directory to copy files into.
+
+        Example:
+            download_s3_prefix("my-bucket", "data/2025/10/", "./downloads")
+        """
+        if not s3_client:
+            # Try to detect region from source bucket for optimal performance
+            s3_client = AWSUtils.get_s3_client(role_arn=role_arn, bucket_name=bucket_name)
+
+        try:
+            paginator = s3_client.get_paginator("list_objects_v2")
+            for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+                if "Contents" not in page:
+                    print(f"No files found for prefix '{prefix}' in bucket '{bucket_name}'.")
+                    return
+
+                for obj in page["Contents"]:
+                    key = obj["Key"]
+
+                    # Skip directories (S3 can list prefixes as "folders")
+                    if key.endswith("/"):
+                        continue
+
+                    # Build local path
+                    relative_path = os.path.relpath(key, prefix)
+                    local_path = os.path.join(local_dir, relative_path)
+
+                    # Ensure local directory exists
+                    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+                    print(f"Downloading s3://{bucket_name}/{key} → {local_path}")
+                    s3_client.download_file(bucket_name, key, local_path)
+
+            print("✅ Download complete.")
+
+        except NoCredentialsError:
+            print("❌ AWS credentials not found. Configure them using `aws configure` or environment variables.")
+        except ClientError as e:
+            print(f"❌ AWS error: {e}")
+
+
+
+
     @staticmethod
     def file_exists_in_s3(bucket: str, key: str, s3_client=None) -> bool:
         """
@@ -571,10 +622,10 @@ class ConfigUtils:
                             help="MAAP secret name for MMGIS host token")
         parser.add_argument("--job-queue", required=True,
                             help="Queue name for running pipeline jobs")
-        parser.add_argument("--zarr-config-url", required=True,
-                            help="S3 URL of the ZARR config file")
         
         # Optional processing parameters
+        parser.add_argument("--zarr-config-url", default="",
+                            help="S3 URL of the ZARR config file")
         parser.add_argument("--variables", default="*",
                             help="Variables to extract from NetCDF (default: all variables '*')")
         parser.add_argument("--enable-concat", action="store_true",
