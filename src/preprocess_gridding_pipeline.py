@@ -10,6 +10,7 @@ import os
 import sys
 import logging
 import subprocess
+from stage_from_daac import search_and_download_granule
 
 from common_utils import (
     MaapUtils, LoggingUtils, ConfigUtils, AWSUtils
@@ -162,7 +163,7 @@ def parse_arguments():
     logger.debug(f"Parsed arguments: {vars(args)}")
     return args
 
-def run_gridding_preprocessor(args) -> str:
+def run_gridding_preprocessor(args, input = None) -> str:
     """
     Run Gridding preprocessor on the input S3 file.
     
@@ -179,23 +180,26 @@ def run_gridding_preprocessor(args) -> str:
 
         if args.config:
             args.config = args.config.split(",")
-        
-        # Download S3 file to local input directory  
-        bucket_name, s3_path = AWSUtils.parse_s3_path(args.input_s3)
-        
-        # Get filename from S3 path
-        input_filename = os.path.basename(s3_path)
-        local_input_path = os.path.join("input", input_filename)
-        
-        logger.debug(f"Downloading {args.input_s3} to {local_input_path}")
-        AWSUtils.download_s3_prefix(bucket_name, s3_path, local_input_path)
+
+        if input:
+            input_filename = input
+        else:    
+            # Download S3 file to local input directory  
+            bucket_name, s3_path = AWSUtils.parse_s3_path(args.input_s3)
+            
+            # Get filename from S3 path
+            input_filename = os.path.basename(s3_path)
+            local_input_path = os.path.join("input", input_filename)
+            
+            logger.debug(f"Downloading {args.input_s3} to {local_input_path}")
+            AWSUtils.download_s3_prefix(bucket_name, s3_path, local_input_path)
         
         # Import and run Gridding preprocessor
         from czdt_iss_transformers.preprocessors.gridding.gridding_preprocessor import main
         
         # Generate output filename
         base_name = os.path.splitext(input_filename)[0]
-        output_filename = f"{base_name}_preprocessed.nc" # TODO: derive file type from full path
+        output_filename = f"{base_name}_output.nc" # TODO: derive file type from full path
         local_output_path = os.path.join("output", output_filename)
 
         logger.debug("Running Gridding preprocessor...")
@@ -264,6 +268,38 @@ def run_localized_pipeline(preprocessed_file: str, original_args, unknown_args=N
         logger.error(f"Localized pipeline failed with return code {e.returncode}")
         logger.error(f"Pipeline stderr: {e.stderr}")
         raise RuntimeError(f"Localized pipeline failed: {e}")
+    
+# TODO: Move this into stage_from_daac.py
+def stage_from_daac_local(args, maap) -> str:
+    """
+    Local implementation of DAAC staging.
+    Downloads granule from DAAC using MAAP and returns local file path.
+    
+    Args:
+        args: Arguments containing granule_id, collection_id
+        maap: MAAP client instance
+        
+    Returns:
+        str: Path to the locally downloaded granule file
+        
+    Raises:
+        GranuleNotFoundError: If the granule cannot be found
+        DownloadError: If download fails
+    """
+    logger.info(f"STAGE_FROM_DAAC - Args: granule_id='{args.granule_id}', collection_id='{args.collection_id}', local_download_path='{getattr(args, 'local_download_path', 'output')}'")
+    logger.debug(f"Starting DAAC staging for granule '{args.granule_id}' in collection '{args.collection_id}'")
+    
+    # Set local download directory
+    local_download_dir = getattr(args, 'local_download_path', 'output')
+    
+    # Search and download granule using imported function
+    downloaded_file_path = search_and_download_granule(
+        maap, args.granule_id, args.collection_id, local_download_dir
+    )
+    
+    logger.debug(f"DAAC staging completed successfully, local file: {downloaded_file_path}")
+    return downloaded_file_path
+
 
 def main():
     """
@@ -275,11 +311,21 @@ def main():
     try:
         # Validate arguments
         ConfigUtils.validate_arguments(args)
+
+        input_type = ConfigUtils.detect_input_type(args)
+
+        current_output = None
+
+        if input_type == "daac":
+            maap_host_to_use = os.environ.get('MAAP_API_HOST', args.maap_host)
+            logger.debug(f"Using MAAP host: {maap_host_to_use}")
+            maap = MaapUtils.get_maap_instance(maap_host_to_use)
+            current_output = stage_from_daac_local(args, maap)
         
         logging.info("Processing Gridding input with preprocessing followed by full pipeline")
         
         # Step 1: Run Gridding preprocessor
-        preprocessed_file = run_gridding_preprocessor(args)
+        preprocessed_file = run_gridding_preprocessor(args, current_output)
         
         # Step 2: Run the main localized pipeline with the preprocessed file
         run_localized_pipeline(preprocessed_file, args)
