@@ -318,9 +318,9 @@ def main():
 
         if input_type == "daac":
             maap_host_to_use = os.environ.get('MAAP_API_HOST', args.maap_host)
-            logger.debug(f"Using MAAP host: {maap_host_to_use}")
             maap = MaapUtils.get_maap_instance(maap_host_to_use)
-            current_output = stage_from_daac_local(args, maap)
+            current_output = stage_from_daac_local(args, maap)     
+            logger.debug(f"DAAC input: {current_output}")
         
         logging.info("Processing Gridding input with preprocessing followed by full pipeline")
         
