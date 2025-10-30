@@ -7,7 +7,8 @@
 basedir=$( cd "$(dirname "$0")" ; pwd -P )
 root_dir=$(dirname $(dirname "${basedir}"))
 
-echo "Running Gridding preprocessing pipeline..."
+echo "Running Gridding preprocessing pipeline....."
+mkdir -p output
 source activate ingest
 # Check if _job.json exists
 if [[ ! -f "_job.json" ]]; then
@@ -16,6 +17,7 @@ if [[ ! -f "_job.json" ]]; then
 fi
 
 # Read parameters from _job.json using jq
+granule_id=$(jq -r '.params.granule_id // empty' _job.json)
 input_s3=$(jq -r '.params.input_s3 // empty' _job.json)
 # Mapped from input_s3
 input_url=$(jq -r '.params.input_s3 // empty' _job.json)
@@ -56,6 +58,7 @@ fi
 
 # Debug: Show parsed parameters
 echo "=== Parsed Parameters from _job.json ==="
+echo "granule_id: ${granule_id}"
 echo "input_s3: ${input_s3}"
 echo "collection_id: ${collection_id}"
 echo "s3_bucket: ${s3_bucket}"
@@ -69,6 +72,9 @@ echo "========================================"
 args=()
 
 # Add parameters if present
+if [[ -n "${granule_id}" ]]; then
+    args+=(--granule-id "${granule_id}")
+fi
 if [[ -n "${input_s3}" ]]; then
     args+=(--input-s3 "${input_s3}")
 fi
