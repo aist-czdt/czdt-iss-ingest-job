@@ -325,10 +325,11 @@ def main():
             logger.debug(f"args.input_url: {args.input_url}")
         
         logging.info("Processing Gridding input with preprocessing followed by full pipeline")
-        
+
         # Step 1: Run Gridding preprocessor
         preprocessed_file = run_gridding_preprocessor(args, current_output)
         
+        args.zarr_config_url = None
         # Step 2: Run the main localized pipeline with the preprocessed file
         run_localized_pipeline(preprocessed_file, args)
         
