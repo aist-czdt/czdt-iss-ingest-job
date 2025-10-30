@@ -270,7 +270,7 @@ def main():
     Main function orchestrating the Gridding preprocessing pipeline.
     """
     logger.debug("Starting Gridding preprocessing pipeline main function")
-    args, unknown_args = parse_arguments()
+    args = parse_arguments()
     
     try:
         # Validate arguments
@@ -282,7 +282,7 @@ def main():
         preprocessed_file = run_gridding_preprocessor(args)
         
         # Step 2: Run the main localized pipeline with the preprocessed file
-        run_localized_pipeline(preprocessed_file, args, unknown_args)
+        run_localized_pipeline(preprocessed_file, args)
         
         logging.info("Gridding preprocessing pipeline completed successfully!")
         logger.debug("All pipeline steps completed without errors")
