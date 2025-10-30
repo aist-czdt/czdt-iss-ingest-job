@@ -199,7 +199,7 @@ def run_gridding_preprocessor(args, input = None) -> str:
         
         # Generate output filename
         base_name = os.path.splitext(input_filename)[0]
-        output_filename = f"{base_name}_output.nc" # TODO: derive file type from full path
+        output_filename = f"{base_name}output.nc" # TODO: derive file type from full path
         local_output_path = os.path.join("output", output_filename)
 
         logger.debug("Running Gridding preprocessor...")

@@ -67,6 +67,7 @@ echo "s3_prefix: ${s3_prefix}"
 echo "role_arn: ${role_arn}"
 echo "variables: ${variables}"
 echo "enable_concat: ${enable_concat}"
+echo "zarr_config_url: ${zarr_config_url}"
 echo "========================================"
 
 # Build arguments for the Gridding preprocessing pipeline
