@@ -181,26 +181,26 @@ def run_gridding_preprocessor(args, input = None) -> str:
         if args.config:
             args.config = args.config.split(",")
 
-        if input:
-            input_filename = input
-        else:    
-            # Download S3 file to local input directory  
-            bucket_name, s3_path = AWSUtils.parse_s3_path(args.input_s3)
+        # if input:
+        #     input_filename = input
+        # else:    
+        #     # Download S3 file to local input directory  
+        #     bucket_name, s3_path = AWSUtils.parse_s3_path(args.input_s3)
             
-            # Get filename from S3 path
-            input_filename = os.path.basename(s3_path)
-            local_input_path = os.path.join("input", input_filename)
+        #     # Get filename from S3 path
+        #     input_filename = os.path.basename(s3_path)
+        #     local_input_path = os.path.join("input", input_filename)
             
-            logger.debug(f"Downloading {args.input_s3} to {local_input_path}")
-            AWSUtils.download_s3_prefix(bucket_name, s3_path, local_input_path)
+        #     logger.debug(f"Downloading {args.input_s3} to {local_input_path}")
+        #     AWSUtils.download_s3_prefix(bucket_name, s3_path, local_input_path)
         
         # Import and run Gridding preprocessor
         from czdt_iss_transformers.preprocessors.gridding.gridding_preprocessor import main
         
         # Generate output filename
-        base_name = os.path.splitext(input_filename)[0]
-        output_filename = f"{base_name}output.nc" # TODO: derive file type from full path
-        local_output_path = os.path.join("output", output_filename)
+        # base_name = os.path.splitext(input_filename)[0]
+        # output_filename = f"{base_name}output.nc" # TODO: derive file type from full path
+        local_output_path = os.path.join("output", f"{args.local_download_path}.nc")
 
         logger.debug("Running Gridding preprocessor...")
         main(args)
@@ -323,13 +323,27 @@ def main():
             logger.debug(f"DAAC input: {current_output}")
             args.input_url = current_output 
             logger.debug(f"args.input_url: {args.input_url}")
+
+        bucket_name, zarr_config_path = AWSUtils.parse_s3_path(args.zarr_config_url)
+        s3_client = AWSUtils.get_s3_client(role_arn=args.role_arn, bucket_name=bucket_name)
         
+        # Download the file
+        os.makedirs("output", exist_ok=True)
+        file_name = os.path.basename(zarr_config_path)
+        
+        local_file_path = f"output/{file_name}"
+
+        logging.info(f"zarr_config_path: {zarr_config_path}")
+        logging.info(f"bucket_name: {bucket_name}, file_name: {file_name}, local_file_path: {local_file_path}")
+
+        s3_client.download_file(bucket_name, zarr_config_path, local_file_path)
+        args.zarr_config_url = local_file_path  
+
         logging.info("Processing Gridding input with preprocessing followed by full pipeline")
 
         # Step 1: Run Gridding preprocessor
         preprocessed_file = run_gridding_preprocessor(args, current_output)
         
-        args.zarr_config_url = None
         # Step 2: Run the main localized pipeline with the preprocessed file
         run_localized_pipeline(preprocessed_file, args)
         
