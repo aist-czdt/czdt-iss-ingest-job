@@ -1,6 +1,6 @@
 algorithm_description: CZDT ISS Localized Pipeline - Runs pipeline steps locally using czdt-iss-transformers instead of MAAP jobs
 algorithm_name: czdt-iss-localized-pipeline
-algorithm_version: localized-pipeline
+algorithm_version: localized-pipeline-v0.0.11
 build_command: czdt-iss-ingest-job/.maap/localized-pipeline/build.sh
 disk_space: 50GB
 docker_container_url: mas.maap-project.org/root/maap-workspaces/custom_images/maap_base:v4.2.0
