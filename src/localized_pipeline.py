@@ -516,7 +516,7 @@ def main():
                     asset_uris = []
                     
                     for l in layer_names:
-                        asset_uris.append(f"{args.geoserver_host}{GEOSERVER_WORKSPACE}/ows?service=WFS&version=1.0.0&request=GetFeature&typeName={GEOSERVER_WORKSPACE}%3A{l}&outputFormat=application%2Fjson&maxFeatures=10000")
+                        asset_uris.append(f"{args.geoserver_host}/{GEOSERVER_WORKSPACE}/ows?service=WFS&version=1.0.0&request=GetFeature&typeName={GEOSERVER_WORKSPACE}%3A{l}&outputFormat=application%2Fjson&maxFeatures=10000")
                     
                     # Determine concept_id: use concept_id if provided, otherwise fall back to collection_id
                     concept_id = getattr(args, 'concept_id', None) or args.collection_id
