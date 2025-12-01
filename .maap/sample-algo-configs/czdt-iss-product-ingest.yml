@@ -56,6 +56,10 @@ inputs:
     description: Enable Zarr concatenation step (true/false)
     name: enable_concat
     required: false
+  - default: "false"
+    description: Enable on-demand ingestion (true/false). 
+    name: on_demand
+    required: false
   - default: "output"
     description: Local directory for temporary downloads
     name: local_download_path
@@ -63,6 +67,10 @@ inputs:
   - default: "api.maap-project.org"
     description: MAAP API host
     name: maap_host
+    required: false
+  - default: ""
+    description: Sub job queue
+    name: job_queue
     required: false
 queue: maap-dps-czdt-worker-8gb
 repository_url: https://github.com/aist-czdt/czdt-iss-ingest-job.git

@@ -12,6 +12,8 @@ import create_stac_items
 from os.path import basename, join
 import fsspec
 import pystac
+from geoserver_ingest import GeoServerClient
+from datetime import datetime
 from common_utils import (
     MaapUtils, LoggingUtils, ConfigUtils, AWSUtils
 )
@@ -20,6 +22,11 @@ from common_utils import (
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
+GEOSERVER_HOST = "http://100.21.202.199:8880/geoserver/"
+GEOSERVER_WORKSPACE = "czdt"
+GEOSERVER_USER = "ingest"
+GEOSERVER_PASSWORD_SECRET_NAME = "geoserver_secret"
 
 def parse_arguments():
     """
@@ -144,16 +151,6 @@ async def convert_netcdf_to_zarr(args, maap, input_source):
     logger.debug("NetCDF to Zarr job completed")
 
     s3_zarr_urls = MaapUtils.get_dps_output([job], ".zarr", True)
-    logger.debug(f"Uploading zarr file directories to S3: {s3_zarr_urls}")
-    aws_region_for_s3 = os.environ.get('AWS_REGION', 'us-west-2')
-    s3_client = AWSUtils.get_s3_client(role_arn=args.role_arn, aws_region=aws_region_for_s3)
-
-    for s3_zarr_url in s3_zarr_urls:
-        src_bucket_name, src_path = AWSUtils.parse_s3_path(s3_zarr_url)
-        dst_bucket_name = args.s3_bucket
-        dst_path = f"{args.s3_prefix}/{args.collection_id}/"
-
-        AWSUtils.copy_s3_folder(src_bucket_name, f"{src_path}/", dst_bucket_name, dst_path, s3_client)
     
     if s3_zarr_urls:        
         product_details = {
@@ -336,6 +333,18 @@ def catalog_products(args, maap, cog_jobs, zarr_job):
                 collection_id = collection_data['id']
                 collection_items = coll.get_items()
 
+                # Convert item hrefs to s3 uris
+                for item in collection_items:
+                    for asset_key, asset in item.assets.items():
+                        if asset.href.startswith("https://") and ".s3." in asset.href:
+                            asset.href = AWSUtils.convert_s3_http_to_s3_uri(asset.href)
+
+                        ogc_uris.append(f"{args.mmgis_host}/stac/collections/{collection_id}/items/{item.id}")
+
+                        if asset_key == "asset" and asset.href not in asset_uris:
+                            asset_uris.append(asset.href)
+
+
                 upserted_collection = create_stac_items.upsert_collection(
                     mmgis_url=args.mmgis_host,
                     mmgis_token=czdt_token,
@@ -348,13 +357,6 @@ def catalog_products(args, maap, cog_jobs, zarr_job):
                     msg = f"STAC catalog update complete for collection {collection_id}."
                     print(msg)
                     LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host)
-
-                    for item in collection_items:
-                        ogc_uris.append(f"{args.mmgis_host}/stac/collections/{collection_id}/items/{item.id}")
-                        
-                        for asset_key, asset in item.assets.items():
-                            if asset_key == "asset" and asset.href not in asset_uris:
-                                asset_uris.append(asset.href)
 
     product_details = {
         "concept_id": args.collection_id,
@@ -422,6 +424,46 @@ async def main():
             cog_jobs = await convert_zarr_to_cog(args, maap, args.input_s3)
             catalog_products(args, maap, cog_jobs, None)
             logger.debug("S3 Zarr pipeline completed successfully")
+            
+        elif input_type == "s3_gpkg":
+            # S3 GeoPackage → Upload 
+            logger.debug("Starting S3 GeoPackage pipeline: catalog")
+
+            aws_region_for_s3 = os.environ.get('AWS_REGION', 'us-west-2')
+            s3_client = AWSUtils.get_s3_client(role_arn=args.role_arn, aws_region=aws_region_for_s3)
+            bucket_name, gpkg_path = AWSUtils.parse_s3_path(args.input_s3)    
+
+            # Download the file
+            file_name = os.path.basename(gpkg_path)
+            local_file_path = f"output/{file_name}"
+            if args.on_demand:
+                local_file_path = f"output/ondemand_{datetime.now().strftime("%Y%m%d%H%M%S")}_{file_name}"
+
+            s3_client.download_file(bucket_name, gpkg_path, local_file_path)
+
+            print(f"File '{gpkg_path}' downloaded successfully to '{local_file_path}'")
+            logger.debug("Starting Geoserver upload")
+
+            client = GeoServerClient(GEOSERVER_HOST, GEOSERVER_USER, maap.secrets.get_secret(GEOSERVER_PASSWORD_SECRET_NAME))
+            client.create_workspace(GEOSERVER_WORKSPACE)
+            success, layer_names = client.upload_geopackage(local_file_path, GEOSERVER_WORKSPACE)
+
+            if success:
+                logger.debug("S3 GeoPackage pipeline completed successfully")
+                asset_uris = []
+
+                for l in layer_names:
+                    asset_uris.append(f"{GEOSERVER_HOST}{GEOSERVER_WORKSPACE}/ows?service=WFS&version=1.0.0&request=GetFeature&typeName={GEOSERVER_WORKSPACE}%3A{l}&outputFormat=application%2Fjson&maxFeatures=10000")                
+
+                product_details = {
+                    "concept_id": args.collection_id,
+                    "uris": asset_uris,
+                    "job_id": MaapUtils.get_job_id()
+                }
+
+                logger.debug(f"Product details for notification: {product_details}")
+                LoggingUtils.cmss_product_available(product_details, args.cmss_logger_host)
+                LoggingUtils.cmss_logger(f"Products available for collection {args.collection_id}", args.cmss_logger_host)
         
         logging.info("Generic pipeline completed successfully!")
         logger.debug("All pipeline steps completed without errors")

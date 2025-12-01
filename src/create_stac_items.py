@@ -19,6 +19,7 @@ def get_min_max_dates_from_collections(collection1: pystac.Collection, collectio
     """
     all_dates = []
 
+
     # Extract dates from collection 1
     if collection1.extent and collection1.extent.temporal:
         for interval in collection1.extent.temporal.intervals:
@@ -36,9 +37,13 @@ def get_min_max_dates_from_collections(collection1: pystac.Collection, collectio
                 all_dates.append(interval[1])
 
     if not all_dates:
+        print("get_min_max_dates_from_collections function found no collection dates.")
         return None, None
     else:
-        return min(all_dates), max(all_dates)
+        min_date = min(all_dates)
+        max_date = max(all_dates)
+        print(f"Min collection date: {min_date}; max collection date: {max_date}")
+        return min_date, max_date
 
 
 def get_collection(mmgis_url, mmgis_token, collection_id):
@@ -71,7 +76,9 @@ def upsert_collection(mmgis_url, mmgis_token, collection_id, collection, collect
 
         if collection_items:            
             print(f"Updating temporal extent of collection {collection_id}...")
-            min_date, max_date = get_min_max_dates_from_collections(collection, remote_collection)            
+            print("Comparing min and max dates of new collection against existing, remote collection.")
+            min_date, max_date = get_min_max_dates_from_collections(collection, remote_collection)   
+
             remote_collection.extent.temporal.intervals = [[min_date, max_date]]
 
             # We have to clear existing links or duplicates will be inserted on PUT
