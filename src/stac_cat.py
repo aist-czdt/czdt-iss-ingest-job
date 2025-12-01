@@ -1,20 +1,20 @@
-import argparse
-from pystac_client import Client
-from urllib.parse import urlparse
-import boto3
-from uuid import uuid4
+import asyncio
 import json
-from common_utils import ConfigUtils, MaapUtils
-from dateutil.parser import isoparse
-from datetime import datetime, timedelta, date
 import logging
 import os
-import asyncio
-from pipeline_generic import wait_for_completion
+import tempfile
+from datetime import datetime, timedelta, date
+from urllib.parse import urlparse
+from uuid import uuid4
+
+import boto3
 import requests
 import yaml
-import tempfile
+from dateutil.parser import isoparse
+from pystac_client import Client
 
+from common_utils import ConfigUtils, MaapUtils
+from pipeline_generic import wait_for_completion
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
 logger = logging.getLogger(__name__)
