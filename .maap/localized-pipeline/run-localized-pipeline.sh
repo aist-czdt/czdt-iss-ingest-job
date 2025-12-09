@@ -83,6 +83,9 @@ echo "role_arn: ${role_arn}"
 echo "variables: ${variables}"
 echo "enable_concat: ${enable_concat}"
 echo "steps: ${steps}"
+echo "grid_resolution: ${grid_resolution}"
+echo "grid_size_lon: ${grid_size_lon}"
+echo "grid_size_lat: ${grid_size_lat}"
 echo "========================================"
 
 # Build arguments for the localized pipeline
