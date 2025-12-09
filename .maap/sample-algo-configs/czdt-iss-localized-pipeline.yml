@@ -1,6 +1,6 @@
 algorithm_description: CZDT ISS Localized Pipeline - Runs pipeline steps locally using czdt-iss-transformers instead of MAAP jobs
 algorithm_name: czdt-iss-localized-pipeline
-algorithm_version: localized-pipeline-v0.0.11
+algorithm_version: localized-pipeline-v0.0.12
 build_command: czdt-iss-ingest-job/.maap/localized-pipeline/build.sh
 disk_space: 50GB
 docker_container_url: mas.maap-project.org/root/maap-workspaces/custom_images/maap_base:v4.2.0
@@ -99,6 +99,42 @@ inputs:
   - default: "lon"
     description: Name of the longitude coordinate (default lon)
     name: lon_coord
+    required: false
+  - default: none
+    description: S3 URL of the gridding config file
+    name: gridding_config_url
+    required: false
+  - default: none
+    description: Output extent for gridding (comma-separated min_lon,min_lat,max_lon,max_lat)
+    name: output_extent
+    required: false
+  - default: none
+    description: Grid resolution in degrees
+    name: grid_resolution
+    required: false
+  - default: none
+    description: Grid size longitude (number of cells, mutually exclusive with grid_resolution)
+    name: grid_size_lon
+    required: false
+  - default: none
+    description: Grid size latitude (number of cells, mutually exclusive with grid_resolution)
+    name: grid_size_lat
+    required: false
+  - default: "netcdf"
+    description: Output format (netcdf or zarr)
+    name: format
+    required: false
+  - default: "3"
+    description: Zarr version (2 or 3)
+    name: zarr_version
+    required: false
+  - default: none
+    description: File pattern for matching input files
+    name: pattern
+    required: false
+  - default: "mean"
+    description: Method for combining overlapping data (mean, min, max, etc.)
+    name: combine
     required: false
 queue: maap-dps-czdt-worker-8gb
 repository_url: https://github.com/aist-czdt/czdt-iss-ingest-job.git
