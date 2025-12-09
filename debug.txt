@@ -1,0 +1,453 @@
+
+hysds.job_worker.WorkerExecutionError:
+ 
+('Got non-zero exit code:
+ 1', 
+{'uuid':
+ '9bf4325a-0a8f-41eb-a896-7284d3d56b3c', 'job_id':
+ 'job-czdt-iss-catalog-job__catalog-job-20251209T215623.466264Z', 'payload_id':
+ 'a216f605-d669-483f-b7d4-444fe0d3ee15', 'payload_hash':
+ 'ec2c722f0a4956ef73380f986d86b7db', 'dedup':
+ False, 'dedup_job':
+ None, 'job':
+ {'type':
+ 'job-czdt-iss-catalog-job:
+catalog-job', 'params':
+ {'_command':
+ "/app/dps_wrapper.sh '/app/czdt-iss-ingest-job/.maap/catalog-job/run-catalog-job.sh' 'aca9deb0-75b1-4d22-941b-19be4ac8f2fb' 'http:
+//100.21.202.199:
+8888' 'czdt_titiler_token' 'http:
+//44.242.188.25:
+8000' 'C3620139643-OB_CLOUD' 'api.maap-project.org' '172800' '64' 'false'", 'localize_urls':
+ [], '_disk_usage':
+ '10GB', 'job_specification':
+ {'container':
+ 'container-czdt-iss-ingest-job:
+catalog-job', 'job-version':
+ 'catalog-job', 'resource':
+ 'jobspec', 'command':
+ "/app/dps_wrapper.sh '/app/czdt-iss-ingest-job/.maap/catalog-job/run-catalog-job.sh'", 'disk_usage':
+ '10GB', 'imported_worker_files':
+ {'$HOME/.netrc':
+ '/home/ops/.netrc', '$HOME/.aws':
+ '/home/ops/.aws', '$HOME/verdi/etc/maap-dps.env':
+ '/home/ops/.maap-dps.env', '/tmp':
+ ['/tmp', 'rw']}, 'post':
+ ['hysds.triage.triage'], 'recommended-queues':
+ ['maap-dps-czdt-worker-8gb'], 'params':
+ [{'name':
+ 'parent_job_id', 'destination':
+ 'positional', 'value':
+ 'aca9deb0-75b1-4d22-941b-19be4ac8f2fb'}, {'name':
+ 'mmgis_host', 'destination':
+ 'positional', 'value':
+ 'http:
+//100.21.202.199:
+8888'}, {'name':
+ 'titiler_token_secret_name', 'destination':
+ 'positional', 'value':
+ 'czdt_titiler_token'}, {'name':
+ 'cmss_logger_host', 'destination':
+ 'positional', 'value':
+ 'http:
+//44.242.188.25:
+8000'}, {'name':
+ 'collection_id', 'destination':
+ 'positional', 'value':
+ 'C3620139643-OB_CLOUD'}, {'name':
+ 'maap_host', 'destination':
+ 'positional', 'value':
+ 'api.maap-project.org'}, {'name':
+ 'max_wait_time', 'destination':
+ 'positional', 'value':
+ '172800'}, {'name':
+ 'max_backoff', 'destination':
+ 'positional', 'value':
+ '64'}, {'name':
+ 'upsert', 'destination':
+ 'positional', 'value':
+ 'false'}], 'soft_time_limit':
+ 86400, 'time_limit':
+ 86400, 'id':
+ 'job-czdt-iss-catalog-job:
+catalog-job'}, 'container_specification':
+ {'id':
+ 'container-czdt-iss-ingest-job:
+catalog-job', 'digest':
+ 'sha256:
+4b5e0ee256cbf49b1e4c32f923bff88b9e01f607cd630631f3df3ac0c849b6c1', 'url':
+ 's3:
+//s3.us-west-2.amazonaws.com/maap-ops-registry/container-czdt-iss-ingest-job:
+catalog-job.tar.gz', 'version':
+ 'catalog-job'}, 'parent_job_id':
+ 'aca9deb0-75b1-4d22-941b-19be4ac8f2fb', 'mmgis_host':
+ 'http:
+//100.21.202.199:
+8888', 'titiler_token_secret_name':
+ 'czdt_titiler_token', 'cmss_logger_host':
+ 'http:
+//44.242.188.25:
+8000', 'collection_id':
+ 'C3620139643-OB_CLOUD', 'maap_host':
+ 'api.maap-project.org', 'max_wait_time':
+ '172800', 'max_backoff':
+ '64', 'upsert':
+ 'false', 'tag':
+ 'Catalog_Job_for_aca9deb0-75b1-4d22-941b-19be4ac8f2fb'}, 'localize_urls':
+ [], 'context':
+ {'_command':
+ "/app/dps_wrapper.sh '/app/czdt-iss-ingest-job/.maap/catalog-job/run-catalog-job.sh' 'aca9deb0-75b1-4d22-941b-19be4ac8f2fb' 'http:
+//100.21.202.199:
+8888' 'czdt_titiler_token' 'http:
+//44.242.188.25:
+8000' 'C3620139643-OB_CLOUD' 'api.maap-project.org' '172800' '64' 'false'", 'localize_urls':
+ [], '_disk_usage':
+ '10GB', 'job_specification':
+ {'command':
+ "/app/dps_wrapper.sh '/app/czdt-iss-ingest-job/.maap/catalog-job/run-catalog-job.sh'", 'container':
+ 'container-czdt-iss-ingest-job:
+catalog-job', 'disk_usage':
+ '10GB', 'id':
+ 'job-czdt-iss-catalog-job:
+catalog-job', 'imported_worker_files':
+ {'$HOME/.aws':
+ '/home/ops/.aws', '$HOME/.netrc':
+ '/home/ops/.netrc', '$HOME/verdi/etc/maap-dps.env':
+ '/home/ops/.maap-dps.env', '/tmp':
+ ['/tmp', 'rw']}, 'job-version':
+ 'catalog-job', 'params':
+ [{'destination':
+ 'positional', 'name':
+ 'parent_job_id', 'value':
+ 'aca9deb0-75b1-4d22-941b-19be4ac8f2fb'}, {'destination':
+ 'positional', 'name':
+ 'mmgis_host', 'value':
+ 'http:
+//100.21.202.199:
+8888'}, {'destination':
+ 'positional', 'name':
+ 'titiler_token_secret_name', 'value':
+ 'czdt_titiler_token'}, {'destination':
+ 'positional', 'name':
+ 'cmss_logger_host', 'value':
+ 'http:
+//44.242.188.25:
+8000'}, {'destination':
+ 'positional', 'name':
+ 'collection_id', 'value':
+ 'C3620139643-OB_CLOUD'}, {'destination':
+ 'positional', 'name':
+ 'maap_host', 'value':
+ 'api.maap-project.org'}, {'destination':
+ 'positional', 'name':
+ 'max_wait_time', 'value':
+ '172800'}, {'destination':
+ 'positional', 'name':
+ 'max_backoff', 'value':
+ '64'}, {'destination':
+ 'positional', 'name':
+ 'upsert', 'value':
+ 'false'}], 'post':
+ ['hysds.triage.triage'], 'recommended-queues':
+ ['maap-dps-czdt-worker-8gb'], 'resource':
+ 'jobspec', 'soft_time_limit':
+ 86400, 'time_limit':
+ 86400}, 'container_specification':
+ {'digest':
+ 'sha256:
+4b5e0ee256cbf49b1e4c32f923bff88b9e01f607cd630631f3df3ac0c849b6c1', 'id':
+ 'container-czdt-iss-ingest-job:
+catalog-job', 'url':
+ 's3:
+//s3.us-west-2.amazonaws.com/maap-ops-registry/container-czdt-iss-ingest-job:
+catalog-job.tar.gz', 'version':
+ 'catalog-job'}, 'parent_job_id':
+ 'aca9deb0-75b1-4d22-941b-19be4ac8f2fb', 'mmgis_host':
+ 'http:
+//100.21.202.199:
+8888', 'titiler_token_secret_name':
+ 'czdt_titiler_token', 'cmss_logger_host':
+ 'http:
+//44.242.188.25:
+8000', 'collection_id':
+ 'C3620139643-OB_CLOUD', 'maap_host':
+ 'api.maap-project.org', 'max_wait_time':
+ '172800', 'max_backoff':
+ '64', 'upsert':
+ 'false', 'tag':
+ 'Catalog_Job_for_aca9deb0-75b1-4d22-941b-19be4ac8f2fb', 'job_priority':
+ 0, 'container_image_name':
+ 'container-czdt-iss-ingest-job:
+catalog-job', 'container_image_url':
+ 's3:
+//s3.us-west-2.amazonaws.com/maap-ops-registry/container-czdt-iss-ingest-job:
+catalog-job.tar.gz', 'container_mappings':
+ {'$HOME/.aws':
+ '/home/ops/.aws', '$HOME/.netrc':
+ '/home/ops/.netrc', '$HOME/verdi/etc/maap-dps.env':
+ '/home/ops/.maap-dps.env', '/tmp':
+ ['/tmp', 'rw']}, 'runtime_options':
+ {}, '_prov':
+ {'wasGeneratedBy':
+ 'task_id:
+9bf4325a-0a8f-41eb-a896-7284d3d56b3c'}, 'container_image_id':
+ 'sha256:
+4b5e0ee256cbf49b1e4c32f923bff88b9e01f607cd630631f3df3ac0c849b6c1', '_force_ingest':
+ True}, 'job_id':
+ 'job-czdt-iss-catalog-job__catalog-job-20251209T215623.466264Z', 'name':
+ 'job-czdt-iss-catalog-job__catalog-job-20251209T215623.466264Z', 'container_image_name':
+ 'container-czdt-iss-ingest-job:
+catalog-job', 'container_image_url':
+ 's3:
+//s3.us-west-2.amazonaws.com/maap-ops-registry/container-czdt-iss-ingest-job:
+catalog-job.tar.gz', 'container_mappings':
+ {'$HOME/.netrc':
+ '/home/ops/.netrc', '$HOME/.aws':
+ '/home/ops/.aws', '$HOME/verdi/etc/maap-dps.env':
+ '/home/ops/.maap-dps.env', '/tmp':
+ ['/tmp', 'rw'], '/home/ops/verdi/etc/celeryconfig.py':
+ 'celeryconfig.py', '/home/ops/verdi/etc/datasets.json':
+ 'datasets.json'}, 'runtime_options':
+ {}, 'priority':
+ 0, 'tag':
+ 'Catalog_Job_for_aca9deb0-75b1-4d22-941b-19be4ac8f2fb', 'username':
+ 'rileykk', 'job_info':
+ {'id':
+ 'job-czdt-iss-catalog-job__catalog-job-20251209T215623.466264Z', 'job_queue':
+ 'maap-dps-czdt-worker-8gb', 'time_queued':
+ '2025-12-09T21:
+56:
+23.465097Z', 'index':
+ 'job_status-2025.12.09', 'time_limit':
+ 86700, 'soft_time_limit':
+ 86400, 'payload_hash':
+ 'ec2c722f0a4956ef73380f986d86b7db', 'dedup':
+ False, 'job_payload':
+ {'job_type':
+ 'job:
+job-czdt-iss-catalog-job:
+catalog-job', 'payload_task_id':
+ 'a216f605-d669-483f-b7d4-444fe0d3ee15'}, 'job_dir':
+ '/data/work/jobs/2025/12/09/22/04/job-czdt-iss-catalog-job__catalog-job-20251209T215623.466264Z', 'metrics':
+ {'inputs_localized':
+ [], 'products_staged':
+ [{'path':
+ '/data/work/jobs/2025/12/09/22/04/job-czdt-iss-catalog-job__catalog-job-20251209T215623.466264Z/triaged_job-job-czdt-iss-catalog-job__catalog-job-20251209T215623.466264Z_task-9bf4325a-0a8f-41eb-a896-7284d3d56b3c', 'disk_usage':
+ 41538, 'time_start':
+ '2025-12-09T22:
+05:
+34.971395Z', 'time_end':
+ '2025-12-09T22:
+05:
+38.225131Z', 'duration':
+ 3.253736, 'transfer_rate':
+ 12766.247784085741, 'id':
+ 'triaged_job-job-czdt-iss-catalog-job__catalog-job-20251209T215623.466264Z_task-9bf4325a-0a8f-41eb-a896-7284d3d56b3c', 'urls':
+ ['https:
+//maap-ops-workspace.s3-website-us-west-2.amazonaws.com/dataset/triaged_job/czdt-iss-catalog-job/catalog-job/2025/12/09/a216f605-d669-483f-b7d4-444fe0d3ee15', 's3:
+//s3-us-west-2.amazonaws.com:
+80/maap-ops-workspace/dataset/triaged_job/czdt-iss-catalog-job/catalog-job/2025/12/09/a216f605-d669-483f-b7d4-444fe0d3ee15'], 'browse_urls':
+ ['https:
+//maap-ops-workspace.s3-website-us-west-2.amazonaws.com/dataset/triaged_job/czdt-iss-catalog-job/catalog-job/2025/12/09/a216f605-d669-483f-b7d4-444fe0d3ee15', 's3:
+//s3-us-west-2.amazonaws.com:
+80/maap-ops-workspace/dataset/triaged_job/czdt-iss-catalog-job/catalog-job/2025/12/09/a216f605-d669-483f-b7d4-444fe0d3ee15'], 'dataset':
+ 'triaged_job', 'ipath':
+ 'hysds:
+:
+data/triaged_job', 'system_version':
+ 'v1.3.1', 'dataset_level':
+ 'NA', 'dataset_type':
+ 'triaged_job', 'index':
+ 'grq_v1.3.1_triaged_job'}], 'job_dir_size':
+ 40163, 'usage_stats':
+ [], 'product_provenance':
+ {'product_type':
+ 'hysds:
+:
+data/triaged_job', 'processing_start_time':
+ '2025-12-09T22:
+04:
+14.783784Z', 'availability_time':
+ '2025-12-09T22:
+05:
+38.225131Z', 'processing_latency':
+ 1.3906891166666666, 'total_latency':
+ 1.3906891166666666}}, 'facts':
+ {'hysds_execute_node':
+ 'ip-10-46-19-219.us-west-2.compute.internal', 'hysds_public_ip':
+ '10.46.19.219', 'ec2_placement_availability_zone':
+ 'us-west-2c', 'ec2_instance_id':
+ 'i-09201b1a00e297a39', 'ec2_instance_type':
+ 'r7iz.xlarge'}, 'execute_node':
+ 'ip-10-46-19-219.us-west-2.compute.internal', 'public_ip':
+ '10.46.19.219', 'job_url':
+ 'http:
+//10.46.19.219:
+8085/jobs/2025/12/09/22/04/job-czdt-iss-catalog-job__catalog-job-20251209T215623.466264Z', 'context_file':
+ '/data/work/jobs/2025/12/09/22/04/job-czdt-iss-catalog-job__catalog-job-20251209T215623.466264Z/_context.json', 'datasets_cfg_file':
+ '/home/ops/verdi/etc/datasets.json', 'time_start':
+ '2025-12-09T22:
+04:
+14.783784Z', 'cmd_start':
+ '2025-12-09T22:
+04:
+14.933527Z', 'cmd_end':
+ '2025-12-09T22:
+05:
+34.961952Z', 'cmd_duration':
+ 80.028425, 'status':
+ 1, 'stdout':
+ '', 'stderr':
+ '', 'pid':
+ 5911, 'time_end':
+ '2025-12-09T22:
+05:
+34.969985Z', 'duration':
+ 80.186201}, 'task_id':
+ '9bf4325a-0a8f-41eb-a896-7284d3d56b3c', 'delivery_info':
+ {'exchange':
+ '', 'routing_key':
+ 'maap-dps-czdt-worker-8gb', 'priority':
+ 0, 'redelivered':
+ False}, 'command':
+ {'path':
+ '/app/dps_wrapper.sh', 'options':
+ [], 'arguments':
+ ['/app/czdt-iss-ingest-job/.maap/catalog-job/run-catalog-job.sh', 'aca9deb0-75b1-4d22-941b-19be4ac8f2fb', 'http:
+//100.21.202.199:
+8888', 'czdt_titiler_token', 'http:
+//44.242.188.25:
+8000', 'C3620139643-OB_CLOUD', 'api.maap-project.org', '172800', '64', 'false'], 'env':
+ []}, 'container_image_id':
+ 'sha256:
+4b5e0ee256cbf49b1e4c32f923bff88b9e01f607cd630631f3df3ac0c849b6c1'}, 'context':
+ {'_command':
+ "/app/dps_wrapper.sh '/app/czdt-iss-ingest-job/.maap/catalog-job/run-catalog-job.sh' 'aca9deb0-75b1-4d22-941b-19be4ac8f2fb' 'http:
+//100.21.202.199:
+8888' 'czdt_titiler_token' 'http:
+//44.242.188.25:
+8000' 'C3620139643-OB_CLOUD' 'api.maap-project.org' '172800' '64' 'false'", 'localize_urls':
+ [], '_disk_usage':
+ '10GB', 'job_specification':
+ {'command':
+ "/app/dps_wrapper.sh '/app/czdt-iss-ingest-job/.maap/catalog-job/run-catalog-job.sh'", 'container':
+ 'container-czdt-iss-ingest-job:
+catalog-job', 'disk_usage':
+ '10GB', 'id':
+ 'job-czdt-iss-catalog-job:
+catalog-job', 'imported_worker_files':
+ {'$HOME/.aws':
+ '/home/ops/.aws', '$HOME/.netrc':
+ '/home/ops/.netrc', '$HOME/verdi/etc/maap-dps.env':
+ '/home/ops/.maap-dps.env', '/tmp':
+ ['/tmp', 'rw']}, 'job-version':
+ 'catalog-job', 'params':
+ [{'destination':
+ 'positional', 'name':
+ 'parent_job_id', 'value':
+ 'aca9deb0-75b1-4d22-941b-19be4ac8f2fb'}, {'destination':
+ 'positional', 'name':
+ 'mmgis_host', 'value':
+ 'http:
+//100.21.202.199:
+8888'}, {'destination':
+ 'positional', 'name':
+ 'titiler_token_secret_name', 'value':
+ 'czdt_titiler_token'}, {'destination':
+ 'positional', 'name':
+ 'cmss_logger_host', 'value':
+ 'http:
+//44.242.188.25:
+8000'}, {'destination':
+ 'positional', 'name':
+ 'collection_id', 'value':
+ 'C3620139643-OB_CLOUD'}, {'destination':
+ 'positional', 'name':
+ 'maap_host', 'value':
+ 'api.maap-project.org'}, {'destination':
+ 'positional', 'name':
+ 'max_wait_time', 'value':
+ '172800'}, {'destination':
+ 'positional', 'name':
+ 'max_backoff', 'value':
+ '64'}, {'destination':
+ 'positional', 'name':
+ 'upsert', 'value':
+ 'false'}], 'post':
+ ['hysds.triage.triage'], 'recommended-queues':
+ ['maap-dps-czdt-worker-8gb'], 'resource':
+ 'jobspec', 'soft_time_limit':
+ 86400, 'time_limit':
+ 86400}, 'container_specification':
+ {'digest':
+ 'sha256:
+4b5e0ee256cbf49b1e4c32f923bff88b9e01f607cd630631f3df3ac0c849b6c1', 'id':
+ 'container-czdt-iss-ingest-job:
+catalog-job', 'url':
+ 's3:
+//s3.us-west-2.amazonaws.com/maap-ops-registry/container-czdt-iss-ingest-job:
+catalog-job.tar.gz', 'version':
+ 'catalog-job'}, 'parent_job_id':
+ 'aca9deb0-75b1-4d22-941b-19be4ac8f2fb', 'mmgis_host':
+ 'http:
+//100.21.202.199:
+8888', 'titiler_token_secret_name':
+ 'czdt_titiler_token', 'cmss_logger_host':
+ 'http:
+//44.242.188.25:
+8000', 'collection_id':
+ 'C3620139643-OB_CLOUD', 'maap_host':
+ 'api.maap-project.org', 'max_wait_time':
+ '172800', 'max_backoff':
+ '64', 'upsert':
+ 'false', 'tag':
+ 'Catalog_Job_for_aca9deb0-75b1-4d22-941b-19be4ac8f2fb', 'job_priority':
+ 0, 'container_image_name':
+ 'container-czdt-iss-ingest-job:
+catalog-job', 'container_image_url':
+ 's3:
+//s3.us-west-2.amazonaws.com/maap-ops-registry/container-czdt-iss-ingest-job:
+catalog-job.tar.gz', 'container_mappings':
+ {'$HOME/.aws':
+ '/home/ops/.aws', '$HOME/.netrc':
+ '/home/ops/.netrc', '$HOME/verdi/etc/maap-dps.env':
+ '/home/ops/.maap-dps.env', '/tmp':
+ ['/tmp', 'rw']}, 'runtime_options':
+ {}, '_prov':
+ {'wasGeneratedBy':
+ 'task_id:
+9bf4325a-0a8f-41eb-a896-7284d3d56b3c'}, 'container_image_id':
+ 'sha256:
+4b5e0ee256cbf49b1e4c32f923bff88b9e01f607cd630631f3df3ac0c849b6c1', '_force_ingest':
+ True}, 'celery_hostname':
+ 'celery@maap-dps-czdt-worker-8gb-00.10.46.19.219', 'status':
+ 'job-failed', 'error':
+ 'Got non-zero exit code:
+ 1', 'short_error':
+ 'Got non-zero exit code:
+ 1', 'traceback':
+ 'During handling of the above exception, another exception occurred:
+\n\nTraceback (most recent call last):
+\n  File "/app/czdt-iss-ingest-job/src/catalog_job.py", line 379, in main\n    maap = MaapUtils.get_maap_instance(args.maap_host)\n  File "/app/czdt-iss-ingest-job/src/common_utils.py", line 300, in get_maap_instance\n    raise RuntimeError(f"Could not initialize MAAP instance:
+ {e}")\nRuntimeError:
+ Could not initialize MAAP instance:
+ HTTPSConnectionPool(host=\'api.maap-project.org\', port=443):
+ Max retries exceeded with url:
+ /api/environment/config (Caused by NewConnectionError(\'<urllib3.connection.HTTPSConnection object at 0x7f763be84c20>:
+ Failed to establish a new connection:
+ [Errno 111] Connection refused\'))\nERROR conda.cli.main_run:
+execute(125):
+ `conda run python /app/czdt-iss-ingest-job/src/catalog_job.py --parent-job-id aca9deb0-75b1-4d22-941b-19be4ac8f2fb --mmgis-host http:
+//100.21.202.199:
+8888 --titiler-token-secret-name czdt_titiler_token --cmss-logger-host http:
+//44.242.188.25:
+8000 --collection-id C3620139643-OB_CLOUD` failed. (See above for error)\n+ tail -n 10 _stderr.txt\n', 'resource':
+ 'job', 'type':
+ 'job-czdt-iss-catalog-job:
+catalog-job', '@version':
+ '1', '@timestamp':
+ '2025-12-09T22:
+05:
+38.245461Z', 'tags':
+ ['Catalog_Job_for_aca9deb0-75b1-4d22-941b-19be4ac8f2fb', 'Catalog_Job_for_aca9deb0-75b1-4d22-941b-19be4ac8f2fb']})
+

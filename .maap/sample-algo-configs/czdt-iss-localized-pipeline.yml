@@ -6,11 +6,7 @@ disk_space: 50GB
 docker_container_url: mas.maap-project.org/root/maap-workspaces/custom_images/maap_base:v4.2.0
 inputs:
   config: []
-  file: 
-  - default: none
-    description: NetCDF file to process (local file path, HTTP/HTTPS URL, or S3 URL)
-    name: input_netcdf
-    required: false
+  file: []
   positional:
   - default: none
     description: DAAC Granule ID (mutually exclusive with input_s3 and input_netcdf)
