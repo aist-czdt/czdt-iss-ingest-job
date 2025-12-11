@@ -98,14 +98,14 @@ def run_cbefs_preprocessor(args):
         preprocessed_files = sorted([str(f) for f in output_files])
         logger.debug(f"CBEFS preprocessing completed successfully, generated {len(preprocessed_files)} files")
         
-        # Return the first file for the pipeline (CBEFS creates time-sliced files)
-        return preprocessed_files[0]
+        # Return the time-sliced files
+        return preprocessed_files
         
     except Exception as e:
         logger.error(f"CBEFS preprocessing failed: {e}")
         raise RuntimeError(f"CBEFS preprocessing failed: {e}")
 
-def run_localized_pipeline(preprocessed_file: str, original_args):
+def run_localized_pipeline(preprocessed_file: str, original_args, collection_id: str):
     """
     Run the main localized pipeline with the preprocessed file.
     """
@@ -116,7 +116,7 @@ def run_localized_pipeline(preprocessed_file: str, original_args):
     cmd = [
         sys.executable, pipeline_script,
         '--input-netcdf', preprocessed_file,
-        '--collection-id', original_args.collection_id,
+        '--collection-id', collection_id,
         '--zarr-config-url', original_args.zarr_config_url,
         '--maap-host', original_args.maap_host,
         '--mmgis-host', original_args.mmgis_host,
@@ -143,6 +143,14 @@ def run_localized_pipeline(preprocessed_file: str, original_args):
         logger.error(f"Localized pipeline failed with return code {e.returncode}")
         logger.error(f"Pipeline stderr: {e.stderr}")
         raise RuntimeError(f"Localized pipeline failed: {e}")
+    
+def find_file(files, endswith):
+    for name in files:
+        if name.endswith(endswith):
+            return name
+
+    return None
+
 
 def main():
     """
@@ -158,10 +166,15 @@ def main():
         logging.info("Processing CBEFS input with preprocessing followed by full pipeline")
         
         # Step 1: Run CBEFS preprocessor
-        preprocessed_file = run_cbefs_preprocessor(args)
-        
-        # Step 2: Run the main localized pipeline with the first preprocessed file
-        run_localized_pipeline(preprocessed_file, args)
+        preprocessed_files = run_cbefs_preprocessor(args)
+
+        coll_prefix = "chesroms_ECB_HR_avg-"
+
+        # Step 2: Run the main localized pipeline with the preprocessed files
+        run_localized_pipeline(find_file(preprocessed_files, "s0_1.nc"), args, coll_prefix + "surface-nowcast")
+        run_localized_pipeline(find_file(preprocessed_files, "s0_2.nc"), args, coll_prefix + "surface-forecast")
+        run_localized_pipeline(find_file(preprocessed_files, "s19_1.nc"), args, coll_prefix + "bottom-nowcast")
+        run_localized_pipeline(find_file(preprocessed_files, "s19_2.nc"), args, coll_prefix + "bottom-forecast")
         
         logging.info("CBEFS preprocessing pipeline completed successfully!")
         logger.debug("All pipeline steps completed without errors")
