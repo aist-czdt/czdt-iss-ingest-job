@@ -218,6 +218,10 @@ pipeline_script="${root_dir}/src/localized_pipeline.py"
 
 if [[ "${zarr_config_url}" == *"pace_cfg.yaml" ]] || [[ "${zarr_config_url}" == *"swot_cfg.yaml" ]]; then
     pipeline_script="${root_dir}/src/preprocess_gridding_pipeline.py"
+elif [[ "${zarr_config_url}" == *"cbefs_cfg.yaml" ]]; then
+    pipeline_script="${root_dir}/src/preprocess_cbefs_pipeline.py"
+else
+    pipeline_script="${root_dir}/src/localized_pipeline.py"
 fi
 
 echo "Executing: python ${pipeline_script} ${args[@]}"
