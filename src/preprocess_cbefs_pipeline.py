@@ -11,6 +11,8 @@ import sys
 import logging
 import subprocess
 from pathlib import Path
+import requests
+from urllib.parse import urlparse
 
 from common_utils import (
     MaapUtils, LoggingUtils, ConfigUtils, AWSUtils
@@ -28,13 +30,6 @@ def parse_arguments():
     logger.debug("Starting argument parsing")
     parser = ConfigUtils.get_generic_argument_parser()
     
-    # Override the input group to only accept input-s3 for preprocessing
-    parser.add_argument(
-        '--input-s3',
-        required=True,
-        help='S3 path to raw CBEFS NetCDF file for preprocessing'
-    )
-    
     # Add CBEFS-specific parameters
     parser.add_argument(
         '--resolution',
@@ -43,8 +38,10 @@ def parse_arguments():
         help='Grid resolution for CBEFS regridding (default: 0.005)'
     )
     
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
     logger.debug(f"Parsed arguments: {vars(args)}")
+    logger.debug(f"Ignored unknown arguments: {unknown}")
+
     return args
 
 def run_cbefs_preprocessor(args):
@@ -62,24 +59,13 @@ def run_cbefs_preprocessor(args):
         os.makedirs("input", exist_ok=True)
         os.makedirs("output", exist_ok=True)
         
-        # Download S3 file to local input directory
-        bucket_name, s3_path = AWSUtils.parse_s3_path(args.input_s3)
-        s3_client = AWSUtils.get_s3_client(role_arn=args.role_arn, bucket_name=bucket_name)
-        
-        # Get filename from S3 path
-        input_filename = os.path.basename(s3_path)
-        local_input_path = os.path.join("input", input_filename)
-        
-        logger.debug(f"Downloading {args.input_s3} to {local_input_path}")
-        s3_client.download_file(bucket_name, s3_path, local_input_path)
-        
         # Import and run CBEFS preprocessor
         from czdt_iss_transformers.preprocessors.cbefs.cbefs_preprocessor import main as cbefs_main
         
         # Create args object for CBEFS preprocessor
         class CBEFSArgs:
             def __init__(self):
-                self.url = local_input_path  # Use downloaded file as URL/path
+                self.url = args.input_s3  # Use downloaded file as URL/path
                 self.resolution = args.resolution
                 self.variables = getattr(args, 'variables', ['oxygen', 'salt'])
                 if isinstance(self.variables, str):
@@ -105,7 +91,7 @@ def run_cbefs_preprocessor(args):
         logger.error(f"CBEFS preprocessing failed: {e}")
         raise RuntimeError(f"CBEFS preprocessing failed: {e}")
 
-def run_localized_pipeline(preprocessed_file: str, original_args, collection_id: str):
+def run_localized_pipeline(preprocessed_file: str, original_args, collection_id: str, unknown_args=None):
     """
     Run the main localized pipeline with the preprocessed file.
     """
@@ -113,24 +99,42 @@ def run_localized_pipeline(preprocessed_file: str, original_args, collection_id:
     
     # Build command for localized pipeline
     pipeline_script = os.path.join(os.path.dirname(__file__), 'localized_pipeline.py')
-    cmd = [
-        sys.executable, pipeline_script,
-        '--input-netcdf', preprocessed_file,
-        '--collection-id', collection_id,
-        '--zarr-config-url', original_args.zarr_config_url,
-        '--maap-host', original_args.maap_host,
-        '--mmgis-host', original_args.mmgis_host,
-        '--titiler-token-secret-name', original_args.titiler_token_secret_name,
-        '--cmss-logger-host', original_args.cmss_logger_host,
+    cmd = [sys.executable, pipeline_script, '--input-netcdf', preprocessed_file]
+    
+    # Add all required arguments - these must be present for localized pipeline to work
+    required_args = [
+        ('s3_bucket', '--s3-bucket'),
+        ('role_arn', '--role-arn'),
+        ('zarr_config_url', '--zarr-config-url'),
+        ('maap_host', '--maap-host'),
+        ('mmgis_host', '--mmgis-host'),
+        ('titiler_token_secret_name', '--titiler-token-secret-name'),
+        ('cmss_logger_host', '--cmss-logger-host'),
+        ('job_queue', '--job-queue')
     ]
     
-    # Add role-arn if provided
-    if hasattr(original_args, 'role_arn') and original_args.role_arn:
-        cmd.extend(['--role-arn', original_args.role_arn])
+    for attr_name, arg_name in required_args:
+        if hasattr(original_args, attr_name) and getattr(original_args, attr_name):
+            cmd.extend([arg_name, getattr(original_args, attr_name)])
+        else:
+            logger.warning(f"Required argument {arg_name} is missing or None")
     
-    # Add variables if provided
-    if hasattr(original_args, 'variables') and original_args.variables:
-        cmd.extend(['--variables', original_args.variables])
+    # Add optional arguments if provided
+    optional_args = [
+        ('collection_id', '--collection-id'),
+        ('variables', '--variables'),
+        ('s3_prefix', '--s3-prefix'),
+        ('local_download_path', '--local-download-path')
+    ]
+    
+    for attr_name, arg_name in optional_args:
+        if hasattr(original_args, attr_name) and getattr(original_args, attr_name):
+            cmd.extend([arg_name, getattr(original_args, attr_name)])
+    
+    # Pass through any unknown arguments to the localized pipeline
+    if unknown_args:
+        cmd.extend(unknown_args)
+        logger.debug(f"Passing through unknown arguments: {unknown_args}")
     
     logger.debug(f"Running command: {' '.join(cmd)}")
     
@@ -159,11 +163,23 @@ def main():
     logger.debug("Starting CBEFS preprocessing pipeline main function")
     args = parse_arguments()
     
-    try:
-        # Validate arguments
-        ConfigUtils.validate_arguments(args)
-        
+    try:        
         logging.info("Processing CBEFS input with preprocessing followed by full pipeline")
+
+        bucket_name, zarr_config_path = AWSUtils.parse_s3_path(args.zarr_config_url)
+        s3_client = AWSUtils.get_s3_client(role_arn=args.role_arn, bucket_name=bucket_name)
+        
+        # Download the file
+        os.makedirs("output", exist_ok=True)
+        file_name = os.path.basename(zarr_config_path)
+        
+        local_file_path = f"output/{file_name}"
+
+        logging.info(f"zarr_config_path: {zarr_config_path}")
+        logging.info(f"bucket_name: {bucket_name}, file_name: {file_name}, local_file_path: {local_file_path}")
+
+        s3_client.download_file(bucket_name, zarr_config_path, local_file_path)
+        args.zarr_config_url = local_file_path  
         
         # Step 1: Run CBEFS preprocessor
         preprocessed_files = run_cbefs_preprocessor(args)
