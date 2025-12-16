@@ -1,0 +1,137 @@
+algorithm_description: CZDT ISS Localized Pipeline - Runs pipeline steps locally using czdt-iss-transformers instead of MAAP jobs
+algorithm_name: czdt-iss-localized-pipeline
+algorithm_version: localized-pipeline-v0.0.12
+build_command: czdt-iss-ingest-job/.maap/localized-pipeline/build.sh
+disk_space: 50GB
+docker_container_url: mas.maap-project.org/root/maap-workspaces/custom_images/maap_base:v4.2.0
+inputs:
+  config: []
+  file: []
+  positional:
+  - default: none
+    description: DAAC Granule ID (mutually exclusive with input_s3 and input_netcdf)
+    name: granule_id
+    required: false
+  - default: none
+    description: S3 URL of input file - NetCDF or Zarr (mutually exclusive with granule_id and input_netcdf)
+    name: input_s3
+    required: false
+  - default: none
+    description: Collection Concept ID (required for DAAC input)
+    name: collection_id
+    required: false
+  - default: none
+    description: Target S3 bucket for uploading processed files
+    name: s3_bucket
+    required: true
+  - default: ""
+    description: Optional S3 prefix (folder path) within the bucket
+    name: s3_prefix
+    required: false
+  - default: none
+    description: AWS IAM Role ARN to assume for S3 upload
+    name: role_arn 
+    required: true
+  - default: none
+    description: Host for logging pipeline messages
+    name: cmss_logger_host 
+    required: true
+  - default: none
+    description: Host for cataloging STAC items
+    name: mmgis_host 
+    required: true
+  - default: none
+    description: MAAP secret name for MMGIS host token
+    name: titiler_token_secret_name 
+    required: true
+  - default: none
+    description: S3 URL of the ZARR config file
+    name: zarr_config_url 
+    required: true
+  - default: "*"
+    description: Variables to extract from NetCDF (default all variables)
+    name: variables
+    required: false
+  - default: "false"
+    description: Enable Zarr concatenation step (true/false)
+    name: enable_concat
+    required: false
+  - default: "output"
+    description: Local directory for temporary downloads
+    name: local_download_path
+    required: false
+  - default: "api.maap-project.org"
+    description: MAAP API host
+    name: maap_host
+    required: false
+  - default: "all"
+    description: Comma-separated list of steps to run - stage,netcdf2zarr,concat,zarr2cog,catalog (default all)
+    name: steps
+    required: false
+  - default: "auto"
+    description: Path to czdt-iss-transformers repository (default auto-detected)
+    name: transformers_path
+    required: false
+  - default: none
+    description: Geoserver host URL (required for GeoPackage processing)
+    name: geoserver_host
+    required: false
+  - default: "false"
+    description: Enable upsert mode for catalog job (update existing items instead of failing on conflicts)
+    name: upsert
+    required: false
+  - default: none
+    description: Concept ID for zarr2cog and catalog operations (overrides collection-id for these steps)
+    name: concept_id
+    required: false
+  - default: "time"
+    description: Name of the time coordinate (default time)
+    name: time_coord
+    required: false
+  - default: "lat"
+    description: Name of the latitude coordinate (default lat)
+    name: lat_coord
+    required: false
+  - default: "lon"
+    description: Name of the longitude coordinate (default lon)
+    name: lon_coord
+    required: false
+  - default: none
+    description: S3 URL of the gridding config file
+    name: gridding_config_url
+    required: false
+  - default: none
+    description: Output extent for gridding (comma-separated min_lon,min_lat,max_lon,max_lat)
+    name: output_extent
+    required: false
+  - default: none
+    description: Grid resolution in degrees
+    name: grid_resolution
+    required: false
+  - default: none
+    description: Grid size longitude (number of cells, mutually exclusive with grid_resolution)
+    name: grid_size_lon
+    required: false
+  - default: none
+    description: Grid size latitude (number of cells, mutually exclusive with grid_resolution)
+    name: grid_size_lat
+    required: false
+  - default: "netcdf"
+    description: Output format (netcdf or zarr)
+    name: format
+    required: false
+  - default: "3"
+    description: Zarr version (2 or 3)
+    name: zarr_version
+    required: false
+  - default: none
+    description: File pattern for matching input files
+    name: pattern
+    required: false
+  - default: "mean"
+    description: Method for combining overlapping data (mean, min, max, etc.)
+    name: combine
+    required: false
+queue: maap-dps-czdt-worker-8gb
+repository_url: https://github.com/aist-czdt/czdt-iss-ingest-job.git
+run_command: czdt-iss-ingest-job/.maap/localized-pipeline/run-localized-pipeline.sh

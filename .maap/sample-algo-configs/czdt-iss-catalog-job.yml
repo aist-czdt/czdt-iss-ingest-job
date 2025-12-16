@@ -1,0 +1,49 @@
+algorithm_description: CZDT ISS Catalog Job - Waits for parent job completion and catalogs processed products to STAC API
+algorithm_name: czdt-iss-catalog-job
+algorithm_version: v0.1.0
+build_command: czdt-iss-ingest-job/.maap/catalog-job/build.sh
+disk_space: 10GB
+docker_container_url: mas.maap-project.org/root/maap-workspaces/custom_images/maap_base:v4.2.0
+inputs:
+  config: []
+  file: []
+  positional:
+  - default: none
+    description: Parent job ID to wait for completion
+    name: parent_job_id
+    required: true
+  - default: none
+    description: Host for cataloging STAC items
+    name: mmgis_host 
+    required: true
+  - default: none
+    description: MAAP secret name for MMGIS host token
+    name: titiler_token_secret_name 
+    required: true
+  - default: none
+    description: Host for logging pipeline messages
+    name: cmss_logger_host 
+    required: true
+  - default: none
+    description: Collection Concept ID for product notifications
+    name: collection_id
+    required: true
+  - default: "api.maap-project.org"
+    description: MAAP API host
+    name: maap_host
+    required: false
+  - default: "172800"
+    description: Maximum wait time for parent job completion in seconds (default 48 hours)
+    name: max_wait_time
+    required: false
+  - default: "64"
+    description: Maximum backoff interval in seconds
+    name: max_backoff
+    required: false
+  - default: "false"
+    description: Enable upsert mode (update existing items instead of failing on conflicts)
+    name: upsert
+    required: false
+queue: maap-dps-czdt-worker-8gb
+repository_url: https://github.com/aist-czdt/czdt-iss-ingest-job.git
+run_command: czdt-iss-ingest-job/.maap/catalog-job/run-catalog-job.sh
