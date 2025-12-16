@@ -1,4 +1,4 @@
-name: catalog-ingest
+name: ingest
 channels:
   - conda-forge
 dependencies:
