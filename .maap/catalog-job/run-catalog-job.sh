@@ -8,7 +8,7 @@ basedir=$( cd "$(dirname "$0")" ; pwd -P )
 root_dir=$(dirname $(dirname "${basedir}"))
 
 echo "Running catalog job..."
-source activate catalog-ingest
+source activate ingest
 
 # Check if _job.json exists
 if [[ ! -f "_job.json" ]]; then
