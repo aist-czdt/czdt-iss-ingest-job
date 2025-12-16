@@ -75,4 +75,4 @@ if [[ "${upsert}" == "true" ]]; then
 fi
 
 echo "Executing: python ${root_dir}/src/catalog_job.py ${args[@]}"
-conda run -n catalog-ingest --live-stream python "${root_dir}/src/catalog_job.py" "${args[@]}"
+conda run -n ingest --live-stream python "${root_dir}/src/catalog_job.py" "${args[@]}"
