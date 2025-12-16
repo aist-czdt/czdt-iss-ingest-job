@@ -1,6 +1,6 @@
 algorithm_description: CZDT ISS Catalog Job - Waits for parent job completion and catalogs processed products to STAC API
 algorithm_name: czdt-iss-catalog-job
-algorithm_version: main
+algorithm_version: v0.1.0
 build_command: czdt-iss-ingest-job/.maap/catalog-job/build.sh
 disk_space: 10GB
 docker_container_url: mas.maap-project.org/root/maap-workspaces/custom_images/maap_base:v4.2.0

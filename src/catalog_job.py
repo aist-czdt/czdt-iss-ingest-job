@@ -114,19 +114,30 @@ Examples:
     return parser.parse_args()
 
 
+@backoff.on_exception(backoff.expo, Exception, max_tries=8, max_time=300)
+def retrieve_job_status(job):
+    """
+    Retrieve job status with retry logic.
+
+    Args:
+        job: MAAP DPS job object
+    """
+    job.retrieve_status()
+
+
 @backoff.on_exception(backoff.expo, RuntimeError, max_value=64, max_time=172800)
 def wait_for_parent_completion(parent_job):
     """
     Wait for parent job to complete with exponential backoff.
-    
+
     Args:
         parent_job: MAAP DPS job object
-        
+
     Raises:
         RuntimeError: If job is still running/pending (triggers backoff)
         ValueError: If job failed or was deleted (no retry)
     """
-    parent_job.retrieve_status()
+    retrieve_job_status(parent_job)
     status = parent_job.status.lower()
     
     logger.info(f"Parent job {parent_job.id} status: {status}")
@@ -172,19 +183,35 @@ def get_authentication_token(token_secret_name: str, maap_host: str) -> str:
         raise
 
 
+@backoff.on_exception(backoff.expo, Exception, max_tries=8, max_time=300)
+def get_s3_presigned_url(maap, bucket_name: str, object_key: str) -> str:
+    """
+    Get S3 presigned URL with retry logic.
+
+    Args:
+        maap: MAAP instance
+        bucket_name: S3 bucket name
+        object_key: S3 object key
+
+    Returns:
+        Presigned URL string
+    """
+    return maap.aws.s3_signed_url(bucket_name, object_key)['url']
+
+
 def get_catalog_from_parent_job(parent_job, maap_host: str) -> Dict[str, Any]:
     """
     Get catalog.json from parent job outputs.
-    
+
     Args:
         parent_job: Completed parent job
         maap_host: MAAP host for presigned URL generation
-        
+
     Returns:
         Parsed catalog dictionary
     """
     logger.info(f"Retrieving catalog.json from parent job {parent_job.id}")
-    
+
     try:
         # Get catalog.json files from parent job outputs
         stac_cat_files = MaapUtils.get_dps_output([parent_job], "catalog.json")
@@ -192,14 +219,14 @@ def get_catalog_from_parent_job(parent_job, maap_host: str) -> Dict[str, Any]:
             error_msg = f"No STAC catalog files found from parent job {parent_job.id}"
             logger.error(error_msg)
             raise RuntimeError(error_msg)
-        
+
         stac_cat_file = stac_cat_files[0]
         logger.info(f"Found STAC catalog file: {stac_cat_file}")
-        
+
         # Generate presigned URL for catalog file
         maap = MaapUtils.get_maap_instance(maap_host)
         bucket_name, catalog_path = AWSUtils.parse_s3_path(stac_cat_file)
-        presigned_url = maap.aws.s3_signed_url(bucket_name, catalog_path)['url']
+        presigned_url = get_s3_presigned_url(maap, bucket_name, catalog_path)
         
         logger.debug(f"Generated presigned URL for catalog.json")
         

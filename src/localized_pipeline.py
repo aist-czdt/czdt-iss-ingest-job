@@ -369,7 +369,7 @@ def submit_catalog_job(args):
         job_params = {
             "identifier": f"Catalog_Job_for_{current_job_id}",
             "algo_id": "czdt-iss-catalog-job",
-            "version": "catalog-job",
+            "version": "v0.1.0",
             "queue": "maap-dps-czdt-worker-8gb",
             "parent_job_id": current_job_id,
             "mmgis_host": args.mmgis_host,

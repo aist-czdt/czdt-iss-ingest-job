@@ -91,7 +91,7 @@ def run_cbefs_preprocessor(args):
         logger.error(f"CBEFS preprocessing failed: {e}")
         raise RuntimeError(f"CBEFS preprocessing failed: {e}")
 
-def run_localized_pipeline(preprocessed_file: str, original_args, collection_id: str, unknown_args=None):
+def run_localized_pipeline(preprocessed_file: str, original_args, unknown_args=None):
     """
     Run the main localized pipeline with the preprocessed file.
     """
@@ -187,10 +187,17 @@ def main():
         coll_prefix = "chesroms_ECB_HR_avg-"
 
         # Step 2: Run the main localized pipeline with the preprocessed files
-        run_localized_pipeline(find_file(preprocessed_files, "s0_1.nc"), args, coll_prefix + "surface-nowcast")
-        run_localized_pipeline(find_file(preprocessed_files, "s0_2.nc"), args, coll_prefix + "surface-forecast")
-        run_localized_pipeline(find_file(preprocessed_files, "s19_1.nc"), args, coll_prefix + "bottom-nowcast")
-        run_localized_pipeline(find_file(preprocessed_files, "s19_2.nc"), args, coll_prefix + "bottom-forecast")
+        args.collection_id = coll_prefix + "surface-nowcast"
+        run_localized_pipeline(find_file(preprocessed_files, "s0_1.nc"), args)
+
+        args.collection_id = coll_prefix + "surface-forecast"
+        run_localized_pipeline(find_file(preprocessed_files, "s0_2.nc"), args)
+
+        args.collection_id = coll_prefix + "bottom-nowcast"
+        run_localized_pipeline(find_file(preprocessed_files, "s19_1.nc"), args)
+
+        args.collection_id = coll_prefix + "bottom-forecast"
+        run_localized_pipeline(find_file(preprocessed_files, "s19_2.nc"), args)
         
         logging.info("CBEFS preprocessing pipeline completed successfully!")
         logger.debug("All pipeline steps completed without errors")
