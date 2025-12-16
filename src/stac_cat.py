@@ -161,7 +161,7 @@ async def main(args):
         logger.info(f"Uploaded manifest to s3://maap-ops-workspace/{manifest_key}")
 
         job_params = {
-            "identifier": f"STAC-Concat-Pipeline_zarr_concat_{manifest_id[-7:]}",
+            "identifier": f"STAC-Concat-Pipeline_zarr_concat_{args.stac_collection}_{manifest_id[-7:]}",
             "algo_id": "CZDT_ZARR_CONCAT",
             "version": "concat-cb",  # TODO: Temp using PGE version to subset to Chesapeake
             "queue": args.job_queue,
