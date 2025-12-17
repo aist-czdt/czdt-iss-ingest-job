@@ -110,10 +110,11 @@ def parse_arguments():
         default='lon',
         help='Name of the longitude coordinate (default: lon)'
     )
-    
-    args = parser.parse_args()
+
+    args, unknown_args = parser.parse_known_args()
     logger.debug(f"Parsed arguments: {vars(args)}")
-    return args
+    logger.debug(f"Unknown arguments: {unknown_args}")
+    return args, unknown_args
 
 # Note: validate_transformers_path function removed - using direct module imports
 
@@ -406,7 +407,7 @@ def main():
     Main function orchestrating the localized pipeline.
     """
     logger.debug("Starting localized pipeline main function")
-    args = parse_arguments()
+    args, unknown_args = parse_arguments()
     
     try:
         # Validate arguments
