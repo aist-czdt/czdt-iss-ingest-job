@@ -175,20 +175,6 @@ if [[ -n "${output_extent}" ]]; then
     args+=(--output-extent "${output_extent}")
 fi
 if [[ -n "${grid_resolution}" ]]; then
-    args+=(--grid-resolution "${grid_resolution}")
-fi
-if [[ -n "${grid_size_lon}" || -n "${grid_size_lat}" ]]; then
-  if [[ -n "${grid_resolution}" ]]; then
-    echo "ERROR: grid_resolution cannot be defined with grid_size_lat/grid_size_lon"
-    exit 1
-  fi
-
-  if [[ -z "${grid_size_lon}" || -z "${grid_size_lat}" ]]; then
-    echo "ERROR: both grid_size_lon and grid_size_lat must be defined together, not just one"
-    exit 1
-  fi
-fi
-if [[ -n "${grid_resolution}" ]]; then
   args+=(
     --grid-resolution "${grid_resolution}"
   )
