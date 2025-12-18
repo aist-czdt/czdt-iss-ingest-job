@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import tempfile
+import warnings
 from datetime import datetime, timedelta, date
 from urllib.parse import urlparse
 from uuid import uuid4
@@ -13,6 +14,7 @@ import requests
 import yaml
 from dateutil.parser import isoparse
 from pystac_client import Client
+from urllib3.exceptions import InsecureRequestWarning
 
 from common_utils import ConfigUtils, MaapUtils
 from pipeline_generic import wait_for_completion
@@ -20,6 +22,38 @@ from pipeline_generic import wait_for_completion
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
+warnings.filterwarnings("ignore", category=InsecureRequestWarning)
+
+
+def _try_secure_get(*pargs, **kwargs):
+    verify = kwargs.get('verify', True)
+    url = pargs[0]
+    url = urlparse(url)
+
+    try:
+        if not verify:
+            logger.warning(f'Making GET request to {url.netloc} without SSL verification')
+        return requests.get(*pargs, verify=verify, **kwargs)
+    except requests.exceptions.SSLError:
+        logger.warning(f'SSL verification failed for GET {url.netloc}, retrying without verification, but this should '
+                       f'be addressed soon')
+        return requests.get(*pargs, verify=False, **kwargs)
+
+
+def _try_secure_post(*pargs, **kwargs):
+    verify = kwargs.get('verify', True)
+    url = pargs[0]
+    url = urlparse(url)
+
+    try:
+        if not verify:
+            logger.warning(f'Making GET request to {url.netloc} without SSL verification')
+        return requests.post(*pargs, verify=verify, **kwargs)
+    except requests.exceptions.SSLError:
+        logger.warning(f'SSL verification failed for GET {url.netloc}, retrying without verification, but this should '
+                       f'be addressed soon')
+        return requests.post(*pargs, verify=False, **kwargs)
 
 
 def _try_delete(bucket, key, s3):
@@ -37,7 +71,7 @@ def _check_collection_in_sdap(args):
     logger.info('Listing SDAP collections')
 
     try:
-        response = requests.get(url, params={'nocached': True}, verify=False)  # TODO: Remove verify=False when able
+        response = _try_secure_get(url, params={'nocached': True})
         response.raise_for_status()
     except Exception as e:
         logger.error(f'Failed to list collections: {e}')
@@ -211,10 +245,9 @@ async def main(args):
         logger.info(f'Collection {args.sdap_collection_name} already exists and will need to be deleted')
 
         try:
-            response = requests.get(  # Yes, I know this should be a DELETE, it's TBD for SDAP
+            response = _try_secure_get(  # Yes, I know this should be a DELETE, it's TBD for SDAP
                 f'{args.sdap_base_url.rstrip("/")}/datasets/remove',
                 params={'name': args.sdap_collection_name},
-                verify=False  # TODO: Remove verify=False when able
             )
             response.raise_for_status()
         except Exception as e:
@@ -239,12 +272,11 @@ async def main(args):
     logger.info(f'headers: {add_headers}')
     logger.info(f'body: {add_body}')
 
-    add_response = requests.post(
+    add_response = _try_secure_post(
         add_url,
         params=add_params,
         headers=add_headers,
         data=yaml.dump(add_body).encode('utf-8'),
-        verify=False  # TODO: Remove verify=False when able
     )
 
     if not add_response.ok:
