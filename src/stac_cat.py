@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, date
 from urllib.parse import urlparse
 from uuid import uuid4
 
+import backoff
 import boto3
 import requests
 import yaml
@@ -77,6 +78,11 @@ def _get_coords_from_config(args, s3_client):
             }
 
     return config['coordinates']
+
+
+@backoff.on_exception(backoff.expo, RuntimeError, max_value=64, max_time=172800)
+def _submit_job_with_maap(maap, **params):
+    return maap.submitJob(**params)
 
 
 async def main(args):
@@ -175,7 +181,8 @@ async def main(args):
         }
 
         logger.debug(f"Submitting Zarr concatenation job with parameters: {job_params}")
-        job = maap.submitJob(**job_params)
+        # job = maap.submitJob(**job_params)
+        job = _submit_job_with_maap(maap, **job_params)
 
         if not job.id:
             error_msg = MaapUtils.job_error_message(job)
@@ -190,7 +197,13 @@ async def main(args):
 
         _try_delete("maap-ops-workspace", manifest_key, s3_client)
 
-        final_zarr_url = MaapUtils.get_dps_output([job], ".zarr", True)[0]
+        final_zarr_urls = MaapUtils.get_dps_output([job], ".zarr", True)
+
+        if len(final_zarr_urls) == 0:
+            logger.error(f'MAAP job {job.id} did not complete successfully')
+            raise RuntimeError(f"MAAP job {job.id} did not complete successfully")
+
+        final_zarr_url = final_zarr_urls[0]
 
     logger.info(f'Final Zarr URL: {final_zarr_url}')
 

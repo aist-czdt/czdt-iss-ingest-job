@@ -16,6 +16,7 @@ from maap.dps.dps_job import DPSJob
 import json
 import requests
 from pathlib import Path
+import backoff
 
 
 class AWSUtils:
@@ -240,6 +241,7 @@ class MaapUtils:
     """MAAP-related utility functions for client management and operations."""
     
     @staticmethod
+    @backoff.on_exception(backoff.expo, RuntimeError, max_value=64, max_time=172800)
     def get_maap_instance(maap_host_url: str) -> MAAP:
         """
         Initialize and return a MAAP client instance.
