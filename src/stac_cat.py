@@ -229,7 +229,7 @@ async def main(args):
         await wait_for_completion(job)
         logger.info("Zarr concatenation job completed")
 
-        _try_delete("maap-ops-workspace", manifest_key, s3_client)
+        # _try_delete("maap-ops-workspace", manifest_key, s3_client)
 
         final_zarr_urls = MaapUtils.get_dps_output([job], ".zarr", True)
 
@@ -238,6 +238,8 @@ async def main(args):
             raise RuntimeError(f"MAAP job {job.id} did not complete successfully")
 
         final_zarr_url = final_zarr_urls[0]
+
+        _try_delete("maap-ops-workspace", manifest_key, s3_client)
 
     logger.info(f'Final Zarr URL: {final_zarr_url}')
 
