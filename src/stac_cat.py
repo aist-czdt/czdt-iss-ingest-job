@@ -114,7 +114,7 @@ def _get_coords_from_config(args, s3_client):
     return config['coordinates']
 
 
-@backoff.on_exception(backoff.expo, RuntimeError, max_value=64, max_time=172800)
+@backoff.on_exception(backoff.expo, (RuntimeError, requests.exceptions.ConnectionError), max_value=64, max_time=172800)
 def _submit_job_with_maap(maap, **params):
     return maap.submitJob(**params)
 
