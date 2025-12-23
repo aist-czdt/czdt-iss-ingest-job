@@ -237,11 +237,36 @@ class AWSUtils:
         return None
 
 
+class BackoffUtils:
+    _logger = logging.getLogger('BackoffLogger')
+
+    @staticmethod
+    def fatal_code(err: Exception) -> bool:
+        if isinstance(err, requests.exceptions.RequestException) and err.response is not None:
+            return err.response.status_code not in [401, 418, 429, 500, 502, 503, 504]
+        return False
+
+    @staticmethod
+    def backoff_logger(details):
+        BackoffUtils._logger.warning(
+            f"Backing off {details['target']} function for {details['wait']:0.1f} "
+            f"seconds after {details['tries']} tries."
+        )
+        BackoffUtils._logger.warning(f"Total time elapsed: {details['elapsed']:0.1f} seconds.")
+
+
 class MaapUtils:
     """MAAP-related utility functions for client management and operations."""
     
     @staticmethod
-    @backoff.on_exception(backoff.expo, RuntimeError, max_value=64, max_time=172800)
+    @backoff.on_exception(
+        backoff.expo,
+        (RuntimeError, requests.exceptions.RequestException),
+        max_value=64,
+        max_time=172800,
+        on_backoff=BackoffUtils.backoff_logger,
+        giveup=BackoffUtils.fatal_code,
+    )
     def get_maap_instance(maap_host_url: str) -> MAAP:
         """
         Initialize and return a MAAP client instance.

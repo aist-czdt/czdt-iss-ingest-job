@@ -16,7 +16,7 @@ from dateutil.parser import isoparse
 from pystac_client import Client
 from urllib3.exceptions import InsecureRequestWarning
 
-from common_utils import ConfigUtils, MaapUtils
+from common_utils import ConfigUtils, MaapUtils, BackoffUtils
 from pipeline_generic import wait_for_completion
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
@@ -114,7 +114,14 @@ def _get_coords_from_config(args, s3_client):
     return config['coordinates']
 
 
-@backoff.on_exception(backoff.expo, (RuntimeError, requests.exceptions.ConnectionError), max_value=64, max_time=172800)
+@backoff.on_exception(
+    backoff.expo,
+    (RuntimeError, requests.exceptions.RequestException),
+    max_value=64,
+    max_time=172800,
+    on_backoff=BackoffUtils.backoff_logger,
+    giveup=BackoffUtils.fatal_code
+)
 def _submit_job_with_maap(maap, **params):
     return maap.submitJob(**params)
 
