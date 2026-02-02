@@ -239,10 +239,11 @@ async def main(args):
         # _try_delete("maap-ops-workspace", manifest_key, s3_client)
 
         final_zarr_urls = MaapUtils.get_dps_output([job], ".zarr", True)
+        debug_all_urls = MaapUtils.get_dps_output([job], "", True)
 
         if len(final_zarr_urls) == 0:
-            logger.error(f'MAAP job {job.id} did not complete successfully')
-            raise RuntimeError(f"MAAP job {job.id} did not complete successfully")
+            logger.error(f'MAAP job {job.id} did not complete successfully. URLs: {debug_all_urls}')
+            raise RuntimeError(f"MAAP job {job.id} did not complete successfully. URLs: {debug_all_urls}")
 
         final_zarr_url = final_zarr_urls[0]
 
