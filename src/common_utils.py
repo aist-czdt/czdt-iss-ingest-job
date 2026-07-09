@@ -306,9 +306,11 @@ class AWSUtils:
                 or None if the input link is not a valid S3 HTTP/HTTPS link.
         """
         # Regex for path-style URLs: https://s3.amazonaws.com/bucket-name/object-key
-        path_style_pattern = r"https?://s3\.amazonaws\.com/([^/]+)/(.*)"
+        # or region-qualified: https://s3.us-west-2.amazonaws.com/bucket-name/object-key
+        path_style_pattern = r"https?://s3\.(?:[a-z0-9-]+\.)?amazonaws\.com/([^/]+)/(.*)"
         # Regex for virtual-hosted-style URLs: https://bucket-name.s3.amazonaws.com/object-key
-        virtual_hosted_style_pattern = r"https?://([^.]+)\.s3\.amazonaws\.com/(.*)"
+        # or region-qualified: https://bucket-name.s3.us-west-2.amazonaws.com/object-key
+        virtual_hosted_style_pattern = r"https?://([^.]+)\.s3\.(?:[a-z0-9-]+\.)?amazonaws\.com/(.*)"
 
         match_path_style = re.match(path_style_pattern, http_s3_link)
         if match_path_style:
