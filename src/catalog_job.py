@@ -274,10 +274,13 @@ def process_catalog_items(catalog: pystac.Catalog) -> Dict[str, int]:
                     for _, asset in item.assets.items():
                         if asset.href.startswith("https://") and ".s3." in asset.href:
                             original_href = asset.href
-                            asset.href = AWSUtils.convert_s3_http_to_s3_uri(asset.href)
-                            if asset.href != original_href:
+                            converted_href = AWSUtils.convert_s3_http_to_s3_uri(asset.href)
+                            if converted_href:
+                                asset.href = converted_href
                                 assets_converted += 1
                                 logger.debug(f"Converted asset href: {original_href} -> {asset.href}")
+                            else:
+                                logger.warning(f"Could not convert asset href to s3 URI, leaving unchanged: {original_href}")
     
     stats = {
         'collections': collections_processed,
@@ -336,9 +339,8 @@ def ingest_catalog_to_stac(catalog: pystac.Catalog, mmgis_host: str, token: str,
                 try:
                     # Collect URIs (href conversion already done in process_catalog_items)
                     for item in collection_items:
+                        ogc_uris.append(f"{mmgis_host}/stac/collections/{collection_id_current}/items/{item.id}")
                         for asset_key, asset in item.assets.items():
-                            ogc_uris.append(f"{mmgis_host}/stac/collections/{collection_id_current}/items/{item.id}")
-                            
                             if asset_key == "asset" and asset.href not in asset_uris:
                                 asset_uris.append(asset.href)
                     
