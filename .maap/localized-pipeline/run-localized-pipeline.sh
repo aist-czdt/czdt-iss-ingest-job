@@ -36,6 +36,7 @@ gridding_config_url=$(jq -r '.params.gridding_config_url // empty' _job.json)
 # Mapped from gridding_config_url
 config=$(jq -r '.params.gridding_config_url // empty' _job.json)
 variables=$(jq -r '.params.variables // "*"' _job.json)
+variable_subsels=$(jq -r '.params.variable_subselections // empty' _job.json)
 enable_concat=$(jq -r '.params.enable_concat // "false"' _job.json)
 local_download_path=$(jq -r '.params.local_download_path // "output"' _job.json)
 maap_host=$(jq -r '.params.maap_host // "api.maap-project.org"' _job.json)
@@ -81,6 +82,7 @@ echo "s3_bucket: ${s3_bucket}"
 echo "s3_prefix: ${s3_prefix}"
 echo "role_arn: ${role_arn}"
 echo "variables: ${variables}"
+echo "variable_subselections: ${variable_subsels}"
 echo "enable_concat: ${enable_concat}"
 echo "steps: ${steps}"
 echo "grid_resolution: ${grid_resolution}"
@@ -136,6 +138,9 @@ if [[ -n "${config}" ]]; then
 fi
 if [[ -n "${variables}" && "${variables}" != "*" ]]; then
     args+=(--variables "${variables}")
+fi
+if [[ -n "${variable_subsels}" ]]; then
+  args+=(--variable-subselections "${variable_subsels}")
 fi
 if [[ "${enable_concat}" == "true" ]]; then
     args+=(--enable-concat)

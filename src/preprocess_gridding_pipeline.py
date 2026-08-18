@@ -6,6 +6,7 @@ This script runs Gridding data preprocessing followed by the full localized pipe
 Designed to be run as a separate MAAP algorithm for Gridding data processing.
 """
 
+import argparse
 import os
 import sys
 import logging
@@ -157,6 +158,34 @@ def parse_arguments():
         choices=['sum', 'mean', 'median', 'min', 'max'],
         default='mean',
         help='Method to combine the output datasets. Can be sum, mean, median, min, max'
+    )
+
+    def _variable_subselections(v):
+        print(v)
+
+        sels = []
+
+        for v_sel in v.split(','):
+            fields = v_sel.split(':')
+
+            if len(fields) == 3:
+                sels.append((fields[0], fields[1], fields[2], None))
+            elif len(fields) == 4:
+                sels.append(tuple(fields))
+
+            if sels[-1][3] not in {None, 'nearest', 'pad', 'ffill', 'backfill', 'bfill', 'isel'}:
+                raise argparse.ArgumentTypeError(f'Invalid selection method: {sels[-1][3]}')
+
+        return sels
+
+    parser.add_argument(
+        '--variable-subselections',
+        required=False,
+        nargs='*',
+        type=_variable_subselections,
+        help='Subselections of provided variables. Supports multiple values and comma-separated values with the format '
+             '<variable_name>:<sel_coordinate>:<sel_value>[:<sel_method>], where sel_method is one of the method '
+             'kwargs in the xarray.DataArray.sel method or "isel" to use xarray.DataArray.isel'
     )
 
     args = parser.parse_args()
