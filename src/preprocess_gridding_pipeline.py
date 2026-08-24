@@ -374,9 +374,16 @@ def main():
         preprocessed_file = run_gridding_preprocessor(args, current_output)
 
         if args.variable_subselections:
-            logger.info(f'DEBUG: {args.variable_subselections}')
-            args.variables = '*'
-        
+            new_variable_names = set()
+            for var, sel_dim, sel_value, sel_method in args.variable_subselections:
+                if sel_method == 'isel':
+                    new_variable_names.add(f'{var}_{sel_dim}_i_{sel_value}')
+                else:
+                    new_variable_names.add(f'{var}_{sel_dim}_{sel_value}')
+            # args.variables = '*'
+            args.variables = ','.join(new_variable_names)
+            logger.info(f'Updated variables parameter to {args.variables}')
+
         # Step 2: Run the main localized pipeline with the preprocessed file
         run_localized_pipeline(preprocessed_file, args)
         
