@@ -372,6 +372,10 @@ def main():
 
         # Step 1: Run Gridding preprocessor
         preprocessed_file = run_gridding_preprocessor(args, current_output)
+
+        if args.variable_subselections:
+            logger.info(f'DEBUG: {args.variable_subselections}')
+            args.variables = '*'
         
         # Step 2: Run the main localized pipeline with the preprocessed file
         run_localized_pipeline(preprocessed_file, args)
