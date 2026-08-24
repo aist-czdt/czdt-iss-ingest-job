@@ -4,6 +4,9 @@
 basedir=$( cd "$(dirname "$0")" ; pwd -P )
 root_dir=$(dirname $(dirname "${basedir}"))
 
+pwd
+ls -la
+ls -la $root_dir
 echo "Building localized pipeline with transformers dependencies from $(git rev-parse HEAD)..."
 
 # Clone czdt-iss-transformers repo if it doesn't exist
