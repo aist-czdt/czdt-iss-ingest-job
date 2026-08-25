@@ -161,8 +161,6 @@ def parse_arguments():
     )
 
     def _variable_subselections(v):
-        print(v)
-
         sels = []
 
         for v_sel in v.split(','):
