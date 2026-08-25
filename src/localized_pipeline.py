@@ -369,7 +369,8 @@ def submit_catalog_job(args):
         # Prepare catalog job parameters
         job_params = {
             # "identifier": f"Catalog_Job_for_{current_job_id}",
-            "identifier": f"Catalog_Job_for_{concept_id}",  # Use concept/coll id for tag for better grouping
+            # "identifier": f"Catalog_Job_for_{concept_id}",  # Use concept/coll id for tag for better grouping
+            "identifier": f"CMR_subscriber_ingest_{concept_id}",  # Use concept/coll id for tag for better grouping
             "algo_id": "czdt-iss-catalog-job",
             "version": "v0.1.9",
             "queue": "maap-dps-czdt-worker-8gb",
