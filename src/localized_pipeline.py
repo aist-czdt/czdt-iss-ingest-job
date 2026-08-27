@@ -365,6 +365,8 @@ def submit_catalog_job(args):
         
         # Get MAAP instance
         maap = MaapUtils.get_maap_instance(args.maap_host)
+
+        logger.info('DEBUG: Is MAAP picking up these code changes?')
         
         # Prepare catalog job parameters
         job_params = {
