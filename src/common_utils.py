@@ -404,7 +404,8 @@ class MaapUtils:
 
         if os.path.exists("_job.json"):
             with open("_job.json", 'r') as fr:
-                return json.load(fr).get("tag", None)
+                tag = json.load(fr).get("tag", None)
+                logging.info(f"Retrieved job tag: {tag}")  # TODO: switch to debug
         return None
 
     @staticmethod
