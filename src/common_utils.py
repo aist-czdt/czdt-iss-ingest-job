@@ -400,12 +400,13 @@ class MaapUtils:
         Returns:
             Job tag string, None if not found
         """
-        logging.debug("Attempting to retrieve job ID from _job.json")
+        logging.debug("Attempting to retrieve job tag from _job.json")
 
         if os.path.exists("_job.json"):
             with open("_job.json", 'r') as fr:
                 tag = json.load(fr).get("tag", None)
                 logging.info(f"Retrieved job tag: {tag}")  # TODO: switch to debug
+        logging.info('Could not retrieve job tag: no _job.json')
         return None
 
     @staticmethod
