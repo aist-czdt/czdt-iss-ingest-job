@@ -393,6 +393,21 @@ class MaapUtils:
         return ""
 
     @staticmethod
+    def get_job_tag() -> str | None:
+        """
+        Retrieve current job tag from _job.json file.
+
+        Returns:
+            Job tag string, None if not found
+        """
+        logging.debug("Attempting to retrieve job ID from _job.json")
+
+        if os.path.exists("_job.json"):
+            with open("_job.json", 'r') as fr:
+                return json.load(fr).get("tag", None)
+        return None
+
+    @staticmethod
     def get_dps_output(jobs: List, file_ext: str, prefixes_only: bool = False) -> List[str]:
         """
         Get DPS job output files from S3.
