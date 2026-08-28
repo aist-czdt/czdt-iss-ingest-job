@@ -289,7 +289,6 @@ def run_localized_pipeline(preprocessed_file: str, original_args, unknown_args=N
     try:
         result = subprocess.run(cmd, check=True, capture_output=False, text=True)
         logger.info("Localized pipeline completed successfully")
-        logger.debug(f"Pipeline output: {result.stdout}")
         return result
     except subprocess.CalledProcessError as e:
         logger.error(f"Localized pipeline failed with return code {e.returncode}")
