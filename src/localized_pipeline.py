@@ -367,12 +367,14 @@ def submit_catalog_job(args):
         maap = MaapUtils.get_maap_instance(args.maap_host)
 
         logger.info('DEBUG: Is MAAP picking up these code changes?')
+
+        job_tag = MaapUtils.get_job_tag() or f"CMR_subscriber_ingest_{concept_id}"  # Use concept/coll id for tag for better grouping
         
         # Prepare catalog job parameters
         job_params = {
             # "identifier": f"Catalog_Job_for_{current_job_id}",
             # "identifier": f"Catalog_Job_for_{concept_id}",  # Use concept/coll id for tag for better grouping
-            "identifier": MaapUtils.get_job_tag() or f"CMR_subscriber_ingest_{concept_id}",  # Use concept/coll id for tag for better grouping
+            "identifier": job_tag,
             "algo_id": "czdt-iss-catalog-job",
             "version": "v0.1.9",
             "queue": "maap-dps-czdt-worker-8gb",
@@ -391,7 +393,7 @@ def submit_catalog_job(args):
         # Submit catalog job
         catalog_job = maap.submitJob(**job_params)
         
-        msg = f"Catalog job {catalog_job.id} submitted to process outputs from parent job {current_job_id}"
+        msg = f"Catalog job {catalog_job.id} [{job_tag}] submitted to process outputs from parent job {current_job_id}"
         print(msg)
         LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host)
         logger.info(f"Catalog job submitted: {catalog_job.id}")
