@@ -36,11 +36,6 @@ conda env update -n ingest --file environment.yml
 popd
 
 
-echo "MORE DEBUGGING..."
-conda list -n ingest
-conda run -n ingest --live-stream pip list
-
-
 # Install transformers dependencies
 echo "Installing transformers dependencies..."
 pushd "${TRANSFORMERS_DIR}"
@@ -48,6 +43,9 @@ conda env update -n ingest --file environment.yaml
 conda run -n ingest pip install -e .
 popd
 
+
+echo "Ensuring MAAP-py is installed (it has been observed to be uninstalled somehow by the above conda step)"
+conda run -n ingest pip install 'maap-py<5'
 
 echo "MORE DEBUGGING..."
 conda list -n ingest
