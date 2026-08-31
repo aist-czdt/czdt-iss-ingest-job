@@ -8,10 +8,6 @@ pushd "${root_dir}"
 echo "Building localized pipeline with transformers dependencies from $(git rev-parse HEAD)..."
 popd
 
-echo "MORE DEBUGGING..."
-conda list -n ingest
-conda run -n ingest --live-stream pip list
-
 # Clone czdt-iss-transformers repo if it doesn't exist
 TRANSFORMERS_DIR="${root_dir}/czdt-iss-transformers"
 if [ ! -d "${TRANSFORMERS_DIR}" ]; then
