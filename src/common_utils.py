@@ -406,6 +406,7 @@ class MaapUtils:
             with open("_job.json", 'r') as fr:
                 tag = json.load(fr).get("tag", None)
                 logging.info(f"Retrieved job tag: {tag}")  # TODO: switch to debug
+                return tag
         logging.info('Could not retrieve job tag: no _job.json')
         return None
 
