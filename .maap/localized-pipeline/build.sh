@@ -43,10 +43,6 @@ popd
 echo "Ensuring MAAP-py is installed (it has been observed to be uninstalled somehow by the above conda step)"
 conda run -n ingest pip install 'maap-py<5'
 
-echo "MORE DEBUGGING..."
-conda list -n ingest
-conda run -n ingest --live-stream pip list
-
 # For input parsing
 conda run -n ingest pip install jq
 echo "Build complete!"

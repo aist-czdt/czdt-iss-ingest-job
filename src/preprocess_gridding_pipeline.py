@@ -377,7 +377,6 @@ def main():
                     new_variable_names.add(f'{var}_{sel_dim}_i_{sel_value}')
                 else:
                     new_variable_names.add(f'{var}_{sel_dim}_{sel_value}')
-            # args.variables = '*'
             args.variables = ','.join(new_variable_names)
             logger.info(f'Updated variables parameter to {args.variables}')
 

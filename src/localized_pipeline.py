@@ -365,16 +365,10 @@ def submit_catalog_job(args):
         
         # Get MAAP instance
         maap = MaapUtils.get_maap_instance(args.maap_host)
-
-        logger.info(f'DEBUG: Is MAAP picking up these code changes? ({os.getcwd()})')
-        logger.info(str(os.listdir()))
-
         job_tag = MaapUtils.get_job_tag() or f"CMR_subscriber_ingest_{concept_id}"  # Use concept/coll id for tag for better grouping
         
         # Prepare catalog job parameters
         job_params = {
-            # "identifier": f"Catalog_Job_for_{current_job_id}",
-            # "identifier": f"Catalog_Job_for_{concept_id}",  # Use concept/coll id for tag for better grouping
             "identifier": job_tag,
             "algo_id": "czdt-iss-catalog-job",
             "version": "v0.1.9",
