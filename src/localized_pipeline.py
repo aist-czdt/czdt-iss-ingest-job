@@ -366,7 +366,8 @@ def submit_catalog_job(args):
         # Get MAAP instance
         maap = MaapUtils.get_maap_instance(args.maap_host)
 
-        logger.info('DEBUG: Is MAAP picking up these code changes?')
+        logger.info(f'DEBUG: Is MAAP picking up these code changes? ({os.getcwd()})')
+        logger.info(str(os.listdir()))
 
         job_tag = MaapUtils.get_job_tag() or f"CMR_subscriber_ingest_{concept_id}"  # Use concept/coll id for tag for better grouping
         
