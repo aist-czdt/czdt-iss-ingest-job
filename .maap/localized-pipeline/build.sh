@@ -8,6 +8,10 @@ pushd "${root_dir}"
 echo "Building localized pipeline with transformers dependencies from $(git rev-parse HEAD)..."
 popd
 
+echo "MORE DEBUGGING..."
+conda list -n ingest
+conda run -n ingest --live-stream pip list
+
 # Clone czdt-iss-transformers repo if it doesn't exist
 TRANSFORMERS_DIR="${root_dir}/czdt-iss-transformers"
 if [ ! -d "${TRANSFORMERS_DIR}" ]; then
@@ -31,12 +35,23 @@ pushd "${basedir}"
 conda env update -n ingest --file environment.yml
 popd
 
+
+echo "MORE DEBUGGING..."
+conda list -n ingest
+conda run -n ingest --live-stream pip list
+
+
 # Install transformers dependencies
 echo "Installing transformers dependencies..."
 pushd "${TRANSFORMERS_DIR}"
 conda env update -n ingest --file environment.yaml
 conda run -n ingest pip install -e .
 popd
+
+
+echo "MORE DEBUGGING..."
+conda list -n ingest
+conda run -n ingest --live-stream pip list
 
 # For input parsing
 conda run -n ingest pip install jq
