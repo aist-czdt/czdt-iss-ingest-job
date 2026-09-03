@@ -52,6 +52,12 @@ inputs:
     description: Variables to extract from NetCDF (default all variables)
     name: variables
     required: false
+  - default: ''
+    description: Subselections of provided variables with the format 
+      <variable_name>:<sel_coordinate>:<sel_value>[:<sel_method>], where sel_method is one 
+      of the method kwargs in the xarray.DataArray.sel method or "isel" to use xarray.DataArray.isel
+    name: variable_subselections
+    required: false
   - default: "false"
     description: Enable Zarr concatenation step (true/false)
     name: enable_concat

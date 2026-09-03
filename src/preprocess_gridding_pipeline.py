@@ -6,6 +6,7 @@ This script runs Gridding data preprocessing followed by the full localized pipe
 Designed to be run as a separate MAAP algorithm for Gridding data processing.
 """
 
+import argparse
 import os
 import sys
 import logging
@@ -159,6 +160,32 @@ def parse_arguments():
         help='Method to combine the output datasets. Can be sum, mean, median, min, max'
     )
 
+    def _variable_subselections(v):
+        sels = []
+
+        for v_sel in v.split(','):
+            fields = v_sel.split(':')
+
+            if len(fields) == 3:
+                sels.append((fields[0], fields[1], fields[2], None))
+            elif len(fields) == 4:
+                sels.append(tuple(fields))
+
+            if sels[-1][3] not in {None, 'nearest', 'pad', 'ffill', 'backfill', 'bfill', 'isel'}:
+                raise argparse.ArgumentTypeError(f'Invalid selection method: {sels[-1][3]}')
+
+        return sels
+
+    parser.add_argument(
+        '--variable-subselections',
+        required=False,
+        nargs='*',
+        type=_variable_subselections,
+        help='Subselections of provided variables. Supports multiple values and comma-separated values with the format '
+             '<variable_name>:<sel_coordinate>:<sel_value>[:<sel_method>], where sel_method is one of the method '
+             'kwargs in the xarray.DataArray.sel method or "isel" to use xarray.DataArray.isel'
+    )
+
     args = parser.parse_args()
     logger.debug(f"Parsed arguments: {vars(args)}")
     return args
@@ -260,9 +287,8 @@ def run_localized_pipeline(preprocessed_file: str, original_args, unknown_args=N
     logger.debug(f"Running command: {' '.join(cmd)}")
     
     try:
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        result = subprocess.run(cmd, check=True, capture_output=False, text=True)
         logger.info("Localized pipeline completed successfully")
-        logger.debug(f"Pipeline output: {result.stdout}")
         return result
     except subprocess.CalledProcessError as e:
         logger.error(f"Localized pipeline failed with return code {e.returncode}")
@@ -343,7 +369,17 @@ def main():
 
         # Step 1: Run Gridding preprocessor
         preprocessed_file = run_gridding_preprocessor(args, current_output)
-        
+
+        if args.variable_subselections:
+            new_variable_names = set()
+            for var, sel_dim, sel_value, sel_method in args.variable_subselections:
+                if sel_method == 'isel':
+                    new_variable_names.add(f'{var}_{sel_dim}_i_{sel_value}')
+                else:
+                    new_variable_names.add(f'{var}_{sel_dim}_{sel_value}')
+            args.variables = ','.join(new_variable_names)
+            logger.info(f'Updated variables parameter to {args.variables}')
+
         # Step 2: Run the main localized pipeline with the preprocessed file
         run_localized_pipeline(preprocessed_file, args)
         

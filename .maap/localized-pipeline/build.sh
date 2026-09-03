@@ -4,7 +4,9 @@
 basedir=$( cd "$(dirname "$0")" ; pwd -P )
 root_dir=$(dirname $(dirname "${basedir}"))
 
-echo "Building localized pipeline with transformers dependencies..."
+pushd "${root_dir}"
+echo "Building localized pipeline with transformers dependencies from $(git rev-parse HEAD)..."
+popd
 
 # Clone czdt-iss-transformers repo if it doesn't exist
 TRANSFORMERS_DIR="${root_dir}/czdt-iss-transformers"
@@ -29,12 +31,17 @@ pushd "${basedir}"
 conda env update -n ingest --file environment.yml
 popd
 
+
 # Install transformers dependencies
 echo "Installing transformers dependencies..."
 pushd "${TRANSFORMERS_DIR}"
 conda env update -n ingest --file environment.yaml
 conda run -n ingest pip install -e .
 popd
+
+
+echo "Ensuring MAAP-py is installed (it has been observed to be uninstalled somehow by the above conda step)"
+conda run -n ingest pip install 'maap-py<5'
 
 # For input parsing
 conda run -n ingest pip install jq
