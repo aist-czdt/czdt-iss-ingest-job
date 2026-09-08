@@ -3,7 +3,7 @@
 import requests
 import json
 import pystac
-from pystac import Collection, ItemCollection
+from pystac import Collection, ItemCollection, SpatialExtent
 
 def get_min_max_dates_from_collections(collection1: pystac.Collection, collection2: pystac.Collection):
     """
@@ -46,6 +46,27 @@ def get_min_max_dates_from_collections(collection1: pystac.Collection, collectio
         return min_date, max_date
 
 
+def _fix_spatial_extent(extent: SpatialExtent) -> SpatialExtent:
+    copy = extent.clone()
+
+    for i in range(len(extent.bboxes)):
+        bbox = extent.bboxes[i]
+        if len(bbox) == 4:
+            min_lon, min_lat, max_lon, max_lat = bbox
+
+            min_lon = max(min_lon, -180.0)
+            min_lat = max(min_lat, -90.0)
+            max_lon = min(max_lon, 180.0)
+            max_lat = min(max_lat, 90.0)
+
+            extent.bboxes[i] = [min_lon, min_lat, max_lon, max_lat]
+
+            if copy.bboxes[i] != extent.bboxes[i]:
+                print(f'Adjusted extent bbox: {copy.bboxes[i]} -> {extent.bboxes[i]}')
+
+    return extent
+
+
 def get_collection(mmgis_url, mmgis_token, collection_id):
     """
     Check if a STAC collection exists.
@@ -80,6 +101,7 @@ def upsert_collection(mmgis_url, mmgis_token, collection_id, collection, collect
             min_date, max_date = get_min_max_dates_from_collections(collection, remote_collection)   
 
             remote_collection.extent.temporal.intervals = [[min_date, max_date]]
+            remote_collection.extent.spatial = _fix_spatial_extent(remote_collection.extent.spatial)
 
             # We have to clear existing links or duplicates will be inserted on PUT
             remote_collection.clear_links()
