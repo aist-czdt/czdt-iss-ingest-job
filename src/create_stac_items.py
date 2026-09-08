@@ -84,18 +84,22 @@ def upsert_collection(mmgis_url, mmgis_token, collection_id, collection, collect
             # We have to clear existing links or duplicates will be inserted on PUT
             remote_collection.clear_links()
 
-            response = requests.put(
-                f"{mmgis_url}/stac/collections/{collection_id}",
-                json=remote_collection.to_dict(),
-                headers={
-                    'Authorization': f'Bearer {mmgis_token}',
-                    'Content-Type': 'application/json'
-                }
-            )
-            response.raise_for_status()
+            try:
+                response = requests.put(
+                    f"{mmgis_url}/stac/collections/{collection_id}",
+                    json=remote_collection.to_dict(),
+                    headers={
+                        'Authorization': f'Bearer {mmgis_token}',
+                        'Content-Type': 'application/json'
+                    }
+                )
+                response.raise_for_status()
+            except requests.HTTPError as e:
+                print(f"Failed to create collection {collection_id}: {response.status_code} - {response.text}")
+                raise e
 
             print(f"Collection '{collection_id}' updated successfully.")
-            
+
             upsert_collection_items(mmgis_url, mmgis_token, collection_id, collection.get_items(), True)
 
         return remote_collection
