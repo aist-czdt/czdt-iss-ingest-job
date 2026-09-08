@@ -27,6 +27,9 @@ GEOSERVER_WORKSPACE = "czdt"
 GEOSERVER_USER = "ingest"
 GEOSERVER_PASSWORD_SECRET_NAME = "geoserver_secret"
 
+# CATALOG_JOB_VERSION = "v0.1.9"
+CATALOG_JOB_VERSION = "catalog-fix"
+
 def parse_arguments():
     """
     Defines and parses command-line arguments for the localized pipeline script.
@@ -371,7 +374,7 @@ def submit_catalog_job(args):
         job_params = {
             "identifier": job_tag,
             "algo_id": "czdt-iss-catalog-job",
-            "version": "v0.1.9",
+            "version": CATALOG_JOB_VERSION,
             "queue": "maap-dps-czdt-worker-8gb",
             "parent_job_id": current_job_id,
             "mmgis_host": args.mmgis_host,
