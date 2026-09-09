@@ -215,5 +215,5 @@ else
     pipeline_script="${root_dir}/src/localized_pipeline.py"
 fi
 
-echo "Executing: python ${pipeline_script} ${args[@]}"
+echo "Executing: conda run -n ingest --live-stream python ${pipeline_script} ${args[@]}"
 conda run -n ingest --live-stream python "${pipeline_script}" "${args[@]}"
