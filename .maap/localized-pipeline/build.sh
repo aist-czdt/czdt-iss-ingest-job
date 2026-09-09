@@ -10,10 +10,12 @@ popd
 
 # Clone czdt-iss-transformers repo if it doesn't exist
 TRANSFORMERS_DIR="${root_dir}/czdt-iss-transformers"
+TRANSFORMERS_BRANCH="cog-source"
+
 if [ ! -d "${TRANSFORMERS_DIR}" ]; then
     echo "Cloning czdt-iss-transformers repository..."
     pushd "${root_dir}"
-    git clone --depth 1 --single-branch --branch master https://github.com/aist-czdt/czdt-iss-transformers.git
+    git clone --depth 1 --single-branch --branch "${TRANSFORMERS_BRANCH}" https://github.com/aist-czdt/czdt-iss-transformers.git
     pushd czdt-iss-transformers
     echo "$(git log -1)"
     popd
