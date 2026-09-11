@@ -478,7 +478,13 @@ def main():
         msg = f"Catalog job completed successfully for parent job {args.parent_job_id}"
         print(msg)
         LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host)
-        logger.info("Catalog job completed successfully")
+        if ingestion_results['failed_collections']:
+            msg = 'Catalog job failed STAC operations - review logs'
+            logger.error(msg)
+            LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host if 'args' in locals() else "localhost")
+            sys.exit(1)
+        else:
+            logger.info("Catalog job completed successfully")
         
     except ValueError as e:
         # Non-retryable errors (job failed, not found, etc.)

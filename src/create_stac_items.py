@@ -8,6 +8,7 @@ from pystac import Collection, ItemCollection, SpatialExtent
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 def get_min_max_dates_from_collections(collection1: pystac.Collection, collection2: pystac.Collection):
