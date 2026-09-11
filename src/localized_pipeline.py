@@ -29,7 +29,7 @@ GEOSERVER_USER = "ingest"
 GEOSERVER_PASSWORD_SECRET_NAME = "geoserver_secret"
 
 # CATALOG_JOB_VERSION = "v0.1.9"
-CATALOG_JOB_VERSION = "catalog-fix"
+CATALOG_JOB_VERSION = "catalog-fix-dev2"
 
 def parse_arguments():
     """

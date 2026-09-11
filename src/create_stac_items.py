@@ -2,8 +2,13 @@
 
 import requests
 import json
+import logging
 import pystac
 from pystac import Collection, ItemCollection, SpatialExtent
+
+
+logger = logging.getLogger(__name__)
+
 
 def get_min_max_dates_from_collections(collection1: pystac.Collection, collection2: pystac.Collection):
     """
@@ -178,6 +183,7 @@ def upsert_collection_items(mmgis_url, mmgis_token, collection_id, collection_it
 
         if 200 <= response.status_code < 300:
             print(f"Successfully created STAC collection items for collection {collection_id}")
+            logger.debug(f"Successfully created STAC collection items for collection {collection_id}\n{response.text}")
         else:
             print(f"Failed to create collection items for {collection_id}: {response.status_code} - {response.text}")
 
