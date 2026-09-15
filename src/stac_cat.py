@@ -207,8 +207,10 @@ async def main(args):
 
         logger.info(f"Uploaded manifest to s3://maap-ops-workspace/{manifest_key}")
 
+        job_tag = MaapUtils.get_job_tag() or f"STAC-Concat-Pipeline_zarr_concat_{args.stac_collection}_{manifest_id[-7:]}"
+
         job_params = {
-            "identifier": f"STAC-Concat-Pipeline_zarr_concat_{args.stac_collection}_{manifest_id[-7:]}",
+            "identifier": job_tag,
             "algo_id": "CZDT_ZARR_CONCAT",
             "version": "concat-cb",  # TODO: Temp using PGE version to subset to Chesapeake
             "queue": args.job_queue,
@@ -231,7 +233,7 @@ async def main(args):
             _try_delete("maap-ops-workspace", manifest_key, s3_client)
             raise RuntimeError(f"Failed to submit Zarr concatenation job: {error_msg}")
 
-        logger.info(f"Zarr concatenation job submitted successfully with ID: {job.id}")
+        logger.info(f"Zarr concatenation job submitted successfully with ID: {job.id} [{job_tag}]")
         logger.info("Waiting for Zarr concatenation job to complete")
         await wait_for_completion(job)
         logger.info("Zarr concatenation job completed")
