@@ -4,19 +4,18 @@ Common utility functions for the CZDT ISS Ingest Job pipeline.
 This module consolidates duplicated functions across the codebase into organized utility classes.
 """
 
+import argparse
+import json
+import logging
 import os
 import re
-import logging
-import argparse
-import boto3
 from typing import Optional, Tuple, List, Dict, Any
+
+import backoff
+import boto3
+import requests
 from botocore.exceptions import ClientError, NoCredentialsError
 from maap.maap import MAAP
-from maap.dps.dps_job import DPSJob
-import json
-import requests
-import backoff
-from pathlib import Path
 
 
 class AWSUtils:
@@ -26,18 +25,18 @@ class AWSUtils:
     def get_bucket_region(bucket_name: str, s3_client=None) -> Optional[str]:
         """
         Detect the region of an S3 bucket using head_bucket operation.
-        
+
         Args:
             bucket_name: S3 bucket name
             s3_client: Optional existing S3 client (region-agnostic)
-            
+
         Returns:
             AWS region name or None if detection fails
         """
         if not s3_client:
             # Create region-agnostic client for region detection
             s3_client = boto3.client('s3')
-        
+
         try:
             response = s3_client.head_bucket(Bucket=bucket_name)
             # Region is returned in the response headers
@@ -47,7 +46,7 @@ class AWSUtils:
                 return region
         except ClientError as e:
             logging.warning(f"Failed to detect region for bucket {bucket_name}: {e}")
-        
+
         return None
 
     @staticmethod
@@ -68,7 +67,7 @@ class AWSUtils:
             aws_region = AWSUtils.get_bucket_region(bucket_name)
             if aws_region:
                 logging.info(f"Auto-detected region {aws_region} for bucket {bucket_name}")
-        
+
         if role_arn:
             try:
                 sts_client = boto3.client('sts')
@@ -327,12 +326,36 @@ class AWSUtils:
         return None
 
 
+class BackoffUtils:
+    _logger = logging.getLogger('BackoffLogger')
+
+    @staticmethod
+    def fatal_code(err: Exception) -> bool:
+        if isinstance(err, requests.exceptions.RequestException) and err.response is not None:
+            return err.response.status_code not in [401, 418, 429, 500, 502, 503, 504]
+        return False
+
+    @staticmethod
+    def backoff_logger(details):
+        BackoffUtils._logger.warning(
+            f"Backing off {details['target']} function for {details['wait']:0.1f} "
+            f"seconds after {details['tries']} tries."
+        )
+        BackoffUtils._logger.warning(f"Total time elapsed: {details['elapsed']:0.1f} seconds.")
+
+
 class MaapUtils:
     """MAAP-related utility functions for client management and operations."""
     
     @staticmethod
-
-    @backoff.on_exception(backoff.expo, RuntimeError, max_value=64, max_time=172800)
+    @backoff.on_exception(
+        backoff.expo,
+        (RuntimeError, requests.exceptions.RequestException),
+        max_value=64,
+        max_time=172800,
+        on_backoff=BackoffUtils.backoff_logger,
+        giveup=BackoffUtils.fatal_code,
+    )
     def get_maap_instance(maap_host_url: str) -> MAAP:
         """
         Initialize and return a MAAP client instance.
