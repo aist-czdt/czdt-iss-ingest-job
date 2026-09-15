@@ -239,7 +239,8 @@ def run_gridding_preprocessor(args, input = None) -> str:
         logger.error(f"Gridding preprocessing failed: {e}")
         raise RuntimeError(f"Gridding preprocessing failed: {e}")
 
-def run_localized_pipeline(preprocessed_file: str, original_args, unknown_args=None):
+
+def run_localized_pipeline(preprocessed_file: str, original_args, source_granule_id, unknown_args=None):
     """
     Run the main localized pipeline with the preprocessed file.
     """
@@ -278,6 +279,9 @@ def run_localized_pipeline(preprocessed_file: str, original_args, unknown_args=N
     for attr_name, arg_name in optional_args:
         if hasattr(original_args, attr_name) and getattr(original_args, attr_name):
             cmd.extend([arg_name, getattr(original_args, attr_name)])
+
+    if source_granule_id:
+        cmd.extend(['--source-granule-id', source_granule_id])
     
     # Pass through any unknown arguments to the localized pipeline
     if unknown_args:
@@ -294,9 +298,10 @@ def run_localized_pipeline(preprocessed_file: str, original_args, unknown_args=N
         logger.error(f"Localized pipeline failed with return code {e.returncode}")
         logger.error(f"Pipeline stderr: {e.stderr}")
         raise RuntimeError(f"Localized pipeline failed: {e}")
-    
+
+
 # TODO: Move this into stage_from_daac.py
-def stage_from_daac_local(args, maap) -> str:
+def stage_from_daac_local(args, maap) -> [str, str]:
     """
     Local implementation of DAAC staging.
     Downloads granule from DAAC using MAAP and returns local file path.
@@ -324,7 +329,7 @@ def stage_from_daac_local(args, maap) -> str:
     )
     
     logger.debug(f"DAAC staging completed successfully, local file: {downloaded_file_path}")
-    return downloaded_file_path
+    return downloaded_file_path, args.granule_id
 
 
 def main():
@@ -341,11 +346,12 @@ def main():
         input_type = ConfigUtils.detect_input_type(args)
 
         current_output = None
+        source_granule_id = None
 
         if input_type == "daac":
             maap_host_to_use = os.environ.get('MAAP_API_HOST', args.maap_host)
             maap = MaapUtils.get_maap_instance(maap_host_to_use)
-            current_output = stage_from_daac_local(args, maap)     
+            current_output, source_granule_id = stage_from_daac_local(args, maap)
             logger.debug(f"DAAC input: {current_output}")
             args.input_url = current_output 
             logger.debug(f"args.input_url: {args.input_url}")
@@ -381,7 +387,7 @@ def main():
             logger.info(f'Updated variables parameter to {args.variables}')
 
         # Step 2: Run the main localized pipeline with the preprocessed file
-        run_localized_pipeline(preprocessed_file, args)
+        run_localized_pipeline(preprocessed_file, args, source_granule_id)
         
         logging.info("Gridding preprocessing pipeline completed successfully!")
         logger.debug("All pipeline steps completed without errors")

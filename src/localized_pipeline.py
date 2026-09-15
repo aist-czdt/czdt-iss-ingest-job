@@ -3,6 +3,7 @@ import sys
 import logging
 import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import List
 
 import pystac
@@ -26,6 +27,9 @@ logger.setLevel(logging.DEBUG)
 GEOSERVER_WORKSPACE = "czdt"
 GEOSERVER_USER = "ingest"
 GEOSERVER_PASSWORD_SECRET_NAME = "geoserver_secret"
+
+# CATALOG_JOB_VERSION = "v0.1.9"
+CATALOG_JOB_VERSION = "catalog-fix-dev2"
 
 def parse_arguments():
     """
@@ -111,6 +115,13 @@ def parse_arguments():
         help='Name of the longitude coordinate (default: lon)'
     )
 
+    parser.add_argument(
+        '--source-granule-id',
+        type=str,
+        dest='source_granule_id',
+        help='ID of source granule'
+    )
+
     args, unknown_args = parser.parse_known_args()
     logger.debug(f"Parsed arguments: {vars(args)}")
     logger.debug(f"Unknown arguments: {unknown_args}")
@@ -141,7 +152,8 @@ def get_enabled_steps(steps_arg: str, input_type: str) -> List[str]:
 
 # Note: run_transformer_command function removed - using direct function calls
 
-def stage_from_daac_local(args, maap) -> str:
+
+def stage_from_daac_local(args, maap) -> [str, str]:
     """
     Local implementation of DAAC staging.
     Downloads granule from DAAC using MAAP and returns local file path.
@@ -169,7 +181,8 @@ def stage_from_daac_local(args, maap) -> str:
     )
     
     logger.debug(f"DAAC staging completed successfully, local file: {downloaded_file_path}")
-    return downloaded_file_path
+    return downloaded_file_path, args.granule_id
+
 
 def convert_netcdf_to_zarr_local(args) -> str:
     """
@@ -275,19 +288,19 @@ def convert_zarr_to_cog_local(args, zarr_path: str) -> List[str]:
     print(f"Running Zarr to COG conversion")
     
     try:
-        # Create argparse-like object for zarr2cog.main()
-        class CogArgs:
-            def __init__(self):
-                self.zarr = zarr_path
-                self.concept_id = concept_id
-                self.output = "cog"
-                self.time = time_coord
-                self.latitude = lat_coord
-                self.longitude = lon_coord
-                self.zarr_access = "stage"
-        
-        cog_args = CogArgs()
-        
+        cog_args = SimpleNamespace(
+            zarr=zarr_path,
+            concept_id=concept_id,
+            output="cog",
+            time=time_coord,
+            latitude=lat_coord,
+            longitude=lon_coord,
+            zarr_access="stage",
+        )
+
+        if hasattr(args, 'source_granule_id') and args.source_granule_id:
+            cog_args.source_granule_id = args.source_granule_id
+
         # Call zarr2cog main function directly
         zarr2cog.main(cog_args)
         
@@ -371,7 +384,7 @@ def submit_catalog_job(args):
         job_params = {
             "identifier": job_tag,
             "algo_id": "czdt-iss-catalog-job",
-            "version": "v0.1.9",
+            "version": CATALOG_JOB_VERSION,
             "queue": "maap-dps-czdt-worker-8gb",
             "parent_job_id": current_job_id,
             "mmgis_host": args.mmgis_host,
@@ -439,11 +452,12 @@ def main():
         
         # Track intermediate outputs
         current_output = None
-        
+
         if input_type == "daac":
             # DAAC pipeline: stage � netcdf2zarr � concat? � zarr2cog � catalog
             if 'stage' in enabled_steps:
-                current_output = stage_from_daac_local(args, maap)
+                current_output, source_granule_id = stage_from_daac_local(args, maap)
+                args.source_granule_id = source_granule_id
             
             if 'netcdf2zarr' in enabled_steps and current_output:
                 # Temporarily set input_netcdf for convert function
