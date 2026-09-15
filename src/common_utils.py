@@ -4,20 +4,18 @@ Common utility functions for the CZDT ISS Ingest Job pipeline.
 This module consolidates duplicated functions across the codebase into organized utility classes.
 """
 
+import argparse
+import json
+import logging
 import os
 import re
-import logging
-import argparse
-import boto3
 from typing import Optional, Tuple, List, Dict, Any
+
+import backoff
+import boto3
+import requests
 from botocore.exceptions import ClientError, NoCredentialsError
 from maap.maap import MAAP
-from maap.dps.dps_job import DPSJob
-import json
-import requests
-import backoff
-from pathlib import Path
-import backoff
 
 
 class AWSUtils:
