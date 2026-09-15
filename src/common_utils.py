@@ -15,6 +15,7 @@ from maap.maap import MAAP
 from maap.dps.dps_job import DPSJob
 import json
 import requests
+import backoff
 from pathlib import Path
 import backoff
 
@@ -23,17 +24,52 @@ class AWSUtils:
     """AWS-related utility functions for S3 operations and client management."""
     
     @staticmethod
-    def get_s3_client(role_arn: str = None, aws_region: str = None):
+    def get_bucket_region(bucket_name: str, s3_client=None) -> Optional[str]:
         """
-        Create and return an S3 client with optional role assumption.
+        Detect the region of an S3 bucket using head_bucket operation.
+
+        Args:
+            bucket_name: S3 bucket name
+            s3_client: Optional existing S3 client (region-agnostic)
+
+        Returns:
+            AWS region name or None if detection fails
+        """
+        if not s3_client:
+            # Create region-agnostic client for region detection
+            s3_client = boto3.client('s3')
+
+        try:
+            response = s3_client.head_bucket(Bucket=bucket_name)
+            # Region is returned in the response headers
+            region = response['ResponseMetadata']['HTTPHeaders'].get('x-amz-bucket-region')
+            if region:
+                logging.debug(f"Detected bucket {bucket_name} in region: {region}")
+                return region
+        except ClientError as e:
+            logging.warning(f"Failed to detect region for bucket {bucket_name}: {e}")
+
+        return None
+
+    @staticmethod
+    def get_s3_client(role_arn: str = None, aws_region: str = None, bucket_name: str = None):
+        """
+        Create and return an S3 client with optional role assumption and dynamic region detection.
         
         Args:
             role_arn: Optional ARN of the role to assume
-            aws_region: AWS region for the client
+            aws_region: AWS region for the client (optional)
+            bucket_name: Optional bucket name for automatic region detection
             
         Returns:
             boto3 S3 client instance
         """
+        # If no region specified but bucket name provided, try to detect region
+        if not aws_region and bucket_name:
+            aws_region = AWSUtils.get_bucket_region(bucket_name)
+            if aws_region:
+                logging.info(f"Auto-detected region {aws_region} for bucket {bucket_name}")
+
         if role_arn:
             try:
                 sts_client = boto3.client('sts')
@@ -100,7 +136,7 @@ class AWSUtils:
     @staticmethod
     def upload_to_s3(file_path: str, bucket: str, key: str, s3_client=None, role_arn: str = None) -> str:
         """
-        Upload a file to S3 with error handling.
+        Upload a file to S3 with error handling and automatic region detection.
         
         Args:
             file_path: Local file path to upload
@@ -119,7 +155,7 @@ class AWSUtils:
             raise FileNotFoundError(f"File not found: {file_path}")
         
         if not s3_client:
-            s3_client = AWSUtils.get_s3_client(role_arn=role_arn)
+            s3_client = AWSUtils.get_s3_client(role_arn=role_arn, bucket_name=bucket)
         
         try:
             logging.info(f"Uploading {file_path} to s3://{bucket}/{key}")
@@ -146,7 +182,8 @@ class AWSUtils:
         """
         
         if not s3_client:
-            s3_client = AWSUtils.get_s3_client(role_arn=role_arn)
+            # Try to detect region from source bucket for optimal performance
+            s3_client = AWSUtils.get_s3_client(role_arn=role_arn, bucket_name=source_bucket)
 
         # List objects in the source "folder"
         objects_to_copy = []
@@ -177,7 +214,58 @@ class AWSUtils:
                 logging.info(f"Successfully copied: {object_key} to {destination_bucket}/{new_object_key}")
             except Exception as e:
                 logging.error(f"Error copying {source_bucket}/{object_key} to {destination_bucket}/{new_object_key}: {e}")
-    
+
+    @staticmethod
+    def download_s3_prefix(bucket_name: str, prefix: str, local_dir: str, s3_client=None, role_arn: str = None):
+        """
+        Download all files from an S3 prefix to a local directory.
+
+        Args:
+            bucket_name (str): Name of the S3 bucket.
+            prefix (str): The prefix (folder path) in the bucket to copy from.
+            local_dir (str): The local directory to copy files into.
+
+        Example:
+            download_s3_prefix("my-bucket", "data/2025/10/", "./downloads")
+        """
+        if not s3_client:
+            # Try to detect region from source bucket for optimal performance
+            s3_client = AWSUtils.get_s3_client(role_arn=role_arn, bucket_name=bucket_name)
+
+        try:
+            paginator = s3_client.get_paginator("list_objects_v2")
+            for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+                if "Contents" not in page:
+                    print(f"No files found for prefix '{prefix}' in bucket '{bucket_name}'.")
+                    return
+
+                for obj in page["Contents"]:
+                    key = obj["Key"]
+
+                    # Skip directories (S3 can list prefixes as "folders")
+                    if key.endswith("/"):
+                        continue
+
+                    # Build local path
+                    relative_path = os.path.relpath(key, prefix)
+                    local_path = os.path.join(local_dir, relative_path)
+
+                    # Ensure local directory exists
+                    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+                    print(f"Downloading s3://{bucket_name}/{key} → {local_path}")
+                    s3_client.download_file(bucket_name, key, local_path)
+
+            print("✅ Download complete.")
+
+        except NoCredentialsError:
+            print("❌ AWS credentials not found. Configure them using `aws configure` or environment variables.")
+        except ClientError as e:
+            print(f"❌ AWS error: {e}")
+
+
+
+
     @staticmethod
     def file_exists_in_s3(bucket: str, key: str, s3_client=None) -> bool:
         """
@@ -192,6 +280,7 @@ class AWSUtils:
             True if file exists, False otherwise
         """
         if not s3_client:
+            # Create region-agnostic client for basic operations
             s3_client = boto3.client('s3')
         
         try:
@@ -218,9 +307,11 @@ class AWSUtils:
                 or None if the input link is not a valid S3 HTTP/HTTPS link.
         """
         # Regex for path-style URLs: https://s3.amazonaws.com/bucket-name/object-key
-        path_style_pattern = r"https?://s3\.amazonaws\.com/([^/]+)/(.*)"
+        # or region-qualified: https://s3.us-west-2.amazonaws.com/bucket-name/object-key
+        path_style_pattern = r"https?://s3\.(?:[a-z0-9-]+\.)?amazonaws\.com/([^/]+)/(.*)"
         # Regex for virtual-hosted-style URLs: https://bucket-name.s3.amazonaws.com/object-key
-        virtual_hosted_style_pattern = r"https?://([^.]+)\.s3\.amazonaws\.com/(.*)"
+        # or region-qualified: https://bucket-name.s3.us-west-2.amazonaws.com/object-key
+        virtual_hosted_style_pattern = r"https?://([^.]+)\.s3\.(?:[a-z0-9-]+\.)?amazonaws\.com/(.*)"
 
         match_path_style = re.match(path_style_pattern, http_s3_link)
         if match_path_style:
@@ -327,6 +418,24 @@ class MaapUtils:
         return ""
 
     @staticmethod
+    def get_job_tag() -> str | None:
+        """
+        Retrieve current job tag from _job.json file.
+
+        Returns:
+            Job tag string, None if not found
+        """
+        logging.debug("Attempting to retrieve job tag from _job.json")
+
+        if os.path.exists("_job.json"):
+            with open("_job.json", 'r') as fr:
+                tag = json.load(fr).get("tag", None)
+                logging.info(f"Retrieved job tag: {tag}")  # TODO: switch to debug
+                return tag
+        logging.info('Could not retrieve job tag: no _job.json')
+        return None
+
+    @staticmethod
     def get_dps_output(jobs: List, file_ext: str, prefixes_only: bool = False) -> List[str]:
         """
         Get DPS job output files from S3.
@@ -340,6 +449,7 @@ class MaapUtils:
         Returns:
             List of S3 paths or prefixes
         """
+        # Use region-agnostic S3 resource for cross-region compatibility
         s3 = boto3.resource('s3')
         output = set()
         job_outputs = [next((path for path in j.retrieve_result() if path.startswith("s3")), None) for j in jobs]
@@ -560,10 +670,10 @@ class ConfigUtils:
                             help="MAAP secret name for MMGIS host token")
         parser.add_argument("--job-queue", required=True,
                             help="Queue name for running pipeline jobs")
-        parser.add_argument("--zarr-config-url", required=True,
-                            help="S3 URL of the ZARR config file")
         
         # Optional processing parameters
+        parser.add_argument("--zarr-config-url", default="",
+                            help="S3 URL of the ZARR config file")
         parser.add_argument("--variables", default="*",
                             help="Variables to extract from NetCDF (default: all variables '*')")
         parser.add_argument("--enable-concat", action="store_true",
@@ -608,6 +718,9 @@ class ConfigUtils:
             elif args.input_s3.endswith('.gpkg'):
                 logging.debug("Detected S3 GeoPackage input type")
                 return "s3_gpkg"
+            elif args.input_s3.endswith('/'):
+                logging.debug("Detected S3 folder input type")
+                return "s3_folder"
             else:
                 logging.debug(f"Unsupported file type detected: {args.input_s3}")
                 raise ValueError(f"Unsupported file type in S3 URL: {args.input_s3}")

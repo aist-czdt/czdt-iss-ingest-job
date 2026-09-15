@@ -1,0 +1,113 @@
+algorithm_description: Resamples one or more swath scenes to a configurable fixed grid
+algorithm_name: czdt-iss-preprocess-gridding
+algorithm_version: localized-pipeline
+build_command: czdt-iss-ingest-job/.maap/localized-pipeline/build.sh
+disk_space: 50GB
+docker_container_url: mas.maap-project.org/root/maap-workspaces/custom_images/maap_base:v4.2.0
+inputs:
+  config: []
+  file: []
+  positional:
+  - default: none
+    description: S3 URL of raw LIS NetCDF file for preprocessing
+    name: input_s3
+    required: true
+  - default: none
+    description: Collection Concept ID for the LIS data
+    name: collection_id
+    required: true
+  - default: none
+    description: Target S3 bucket for uploading processed files
+    name: s3_bucket
+    required: true
+  - default: ""
+    description: Optional S3 prefix (folder path) within the bucket
+    name: s3_prefix
+    required: false
+  - default: none
+    description: AWS IAM Role ARN to assume for S3 upload
+    name: role_arn 
+    required: true
+  - default: none
+    description: Host for logging pipeline messages
+    name: cmss_logger_host 
+    required: true
+  - default: none
+    description: Host for cataloging STAC items
+    name: mmgis_host 
+    required: true
+  - default: none
+    description: MAAP secret name for MMGIS host token
+    name: titiler_token_secret_name 
+    required: true
+  - default: none
+    description: S3 URL of the gridding config file for LIS data
+    name: gridding_config_url 
+    required: true
+  - default: "*"
+    description: Variables to extract from NetCDF (default all variables)
+    name: variables
+    required: false
+  - default: "false"
+    description: Enable Zarr concatenation step (true/false)
+    name: enable_concat
+    required: false
+  - default: "output"
+    description: Local directory for temporary downloads
+    name: local_download_path
+    required: false
+  - default: "api.maap-project.org"
+    description: MAAP API host
+    name: maap_host
+    required: false
+  - default: "false"
+    description: Enable upsert mode for catalog job (update existing items instead of failing on conflicts)
+    name: upsert
+    required: false
+  - default: none
+    description: Concept ID for zarr2cog and catalog operations (overrides collection-id for these steps)
+    name: concept_id
+    required: false
+  - default: -180,-90,180,90
+    description: Output extent of gridded dataset. Must be comma-separated real numbers
+      in order min-lon,min-lat,max-lon,max-lat. Longitudes must be in [-180, 180]
+      and latitudes in [-90, 90]. Minimum extent values must be less than maximum
+      extent values.
+    name: output_extent
+    required: false
+  - default: ''
+    description: Output grid resolution in degrees. Mutually exclusive with grid_size_lon
+      & grid_size_lat.
+    name: grid_resolution
+    required: false
+  - default: ''
+    description: Output grid size in pixels - longitude. Mutually exclusive with grid_resolution.
+      If defined, grid_size_lat must also be defined.
+    name: grid_size_lon
+    required: false
+  - default: ''
+    description: Output grid size in pixels - latitude. Mutually exclusive with grid_resolution.
+      If defined, grid_size_lon must also be defined.
+    name: grid_size_lat
+    required: false
+  - default: netcdf
+    description: Output file format. Either netcdf or zarr
+    name: format
+    required: false
+  - default: '3'
+    description: Version of zarr standard to output. Only applies if format=zarr,
+      otherwise does nothing.
+    name: zarr_version
+    required: false
+  - default: '*.nc'
+    description: Glob pattern to match input files. Important if input is a directory
+      with non-input files present
+    name: pattern
+    required: false
+  - default: 'mean'
+    description: Combine pattern
+    name: combine
+    required: false
+queue: maap-dps-czdt-worker-8gb
+repository_url: https://github.com/aist-czdt/czdt-iss-ingest-job.git
+run_command: czdt-iss-ingest-job/.maap/gridding-preprocessing/run-gridding-preprocessing.sh

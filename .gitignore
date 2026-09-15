@@ -1,2 +1,11 @@
 
 .idea/
+.claude/*
+.devcontainer/
+.vscode/
+src/__pycache__/
+test/test-files/output
+src/update_stac_hrefs.py
+src/ingest-stac.py
+STAC-API.http
+MAAP_Algorithm_Conversion_Guide.md
