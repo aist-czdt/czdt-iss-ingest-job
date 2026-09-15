@@ -10,7 +10,7 @@ popd
 
 # Clone czdt-iss-transformers repo if it doesn't exist
 TRANSFORMERS_DIR="${root_dir}/czdt-iss-transformers"
-TRANSFORMERS_BRANCH="cog-source"
+TRANSFORMERS_BRANCH="master"
 
 if [ ! -d "${TRANSFORMERS_DIR}" ]; then
     echo "Cloning czdt-iss-transformers repository..."
