@@ -16,7 +16,7 @@ import pystac
 import backoff
 
 # Import existing utility functions
-from common_utils import AWSUtils, MaapUtils, LoggingUtils
+from common_utils import AWSUtils, MaapUtils, LoggingUtils, normalize_base_url
 import create_stac_items
 
 # Configure logging
@@ -64,7 +64,8 @@ Examples:
     parser.add_argument(
         '--mmgis-host',
         required=True,
-        help='STAC API host URL (e.g., https://stac.example.com)'
+        type=normalize_base_url,
+        help='STAC API host URL (e.g., https://stac.example.com); trailing slashes are ignored'
     )
     
     parser.add_argument(
@@ -76,7 +77,8 @@ Examples:
     parser.add_argument(
         '--cmss-logger-host',
         required=True,
-        help='Host for logging pipeline messages'
+        type=normalize_base_url,
+        help='Host for logging pipeline messages; trailing slashes are ignored'
     )
     
     parser.add_argument(
@@ -88,7 +90,8 @@ Examples:
     parser.add_argument(
         '--maap-host',
         default='api.maap-project.org',
-        help='MAAP host (default: api.maap-project.org)'
+        type=normalize_base_url,
+        help='MAAP host (default: api.maap-project.org); trailing slashes are ignored'
     )
     
     parser.add_argument(
@@ -312,6 +315,7 @@ def ingest_catalog_to_stac(catalog: pystac.Catalog, mmgis_host: str, token: str,
     Returns:
         Dictionary with ingestion results
     """
+    mmgis_host = normalize_base_url(mmgis_host)
     logger.info(f"Starting STAC API ingestion to {mmgis_host} (upsert_mode={upsert_mode})")
     
     collections_ingested = 0
