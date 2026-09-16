@@ -15,7 +15,7 @@ import pystac
 from geoserver_ingest import GeoServerClient
 from datetime import datetime
 from common_utils import (
-    MaapUtils, LoggingUtils, ConfigUtils, AWSUtils
+    MaapUtils, LoggingUtils, ConfigUtils, AWSUtils, normalize_base_url
 )
 
 # Configure logging: DEBUG for this module, INFO for dependencies
@@ -339,7 +339,7 @@ def catalog_products(args, maap, cog_jobs, zarr_job):
                         if asset.href.startswith("https://") and ".s3." in asset.href:
                             asset.href = AWSUtils.convert_s3_http_to_s3_uri(asset.href)
 
-                        ogc_uris.append(f"{args.mmgis_host}/stac/collections/{collection_id}/items/{item.id}")
+                        ogc_uris.append(f"{normalize_base_url(args.mmgis_host)}/stac/collections/{collection_id}/items/{item.id}")
 
                         if asset_key == "asset" and asset.href not in asset_uris:
                             asset_uris.append(asset.href)

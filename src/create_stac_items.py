@@ -73,11 +73,17 @@ def _fix_spatial_extent(extent: SpatialExtent) -> SpatialExtent:
     return extent
 
 
+def _normalize_base_url(url):
+    """Strip whitespace and trailing slashes so f"{url}/path" never yields a double slash."""
+    return url.strip().rstrip('/') if url else url
+
+
 def get_collection(mmgis_url, mmgis_token, collection_id):
     """
     Check if a STAC collection exists.
     Returns collection if collection exists, None otherwise.
     """
+    mmgis_url = _normalize_base_url(mmgis_url)
     url = f'{mmgis_url}/stac/collections/{collection_id}'
     
     try:
@@ -96,6 +102,7 @@ def upsert_collection(mmgis_url, mmgis_token, collection_id, collection, collect
     Upsert a STAC collection exists.
     Returns (collection: Collection)
     """
+    mmgis_url = _normalize_base_url(mmgis_url)
     remote_collection = get_collection(mmgis_url, mmgis_token, collection_id)
 
     if remote_collection:
@@ -161,6 +168,7 @@ def upsert_collection(mmgis_url, mmgis_token, collection_id, collection, collect
 
 
 def upsert_collection_items(mmgis_url, mmgis_token, collection_id, collection_items, upsert_items=False):
+    mmgis_url = _normalize_base_url(mmgis_url)
 
     try:
         # Insert items

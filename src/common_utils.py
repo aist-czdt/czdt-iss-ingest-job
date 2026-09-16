@@ -18,6 +18,25 @@ from botocore.exceptions import ClientError, NoCredentialsError
 from maap.maap import MAAP
 
 
+def normalize_base_url(url: Optional[str]) -> Optional[str]:
+    """
+    Normalize a base URL/host so it can be safely joined with a path.
+
+    Strips surrounding whitespace and any trailing slashes so that
+    f"{base}/path" never produces a double slash (e.g. "http://host:8888//stac"),
+    which MMGIS and other services reject with a 404.
+
+    Args:
+        url: Base URL or host (e.g. "http://host:8888/", "api.maap-project.org")
+
+    Returns:
+        Normalized URL, or the input unchanged if it is None/empty
+    """
+    if not url:
+        return url
+    return url.strip().rstrip('/')
+
+
 class AWSUtils:
     """AWS-related utility functions for S3 operations and client management."""
     
@@ -369,6 +388,7 @@ class MaapUtils:
         Raises:
             RuntimeError: If MAAP client initialization fails
         """
+        maap_host_url = normalize_base_url(maap_host_url)
         try:
             logging.info(f"Initializing MAAP client for host: {maap_host_url}")
             maap_client = MAAP(maap_host=maap_host_url)
@@ -540,7 +560,7 @@ class LoggingUtils:
         
         try:
             endpoint = "log"
-            url = f"{host}/{endpoint}"
+            url = f"{normalize_base_url(host)}/{endpoint}"
             body = {"level": "info", "msg_body": str(message)}
             logging.debug(f"CMSS logger URL: {url}, body: {body}")
             response = requests.post(url, json=body)
@@ -574,7 +594,7 @@ class LoggingUtils:
                 headers['Authorization'] = f'Bearer {token}'
             
             response = requests.post(
-                f"{host}/product",
+                f"{normalize_base_url(host)}/product",
                 json=product_info,
                 headers=headers,
                 timeout=10
@@ -611,17 +631,17 @@ class ConfigUtils:
                           help='AWS role ARN to assume for S3 access')
         
         # MAAP configuration
-        parser.add_argument('--maap-host', type=str, 
+        parser.add_argument('--maap-host', type=normalize_base_url,
                           default='https://api.maap-project.org',
-                          help='MAAP host URL')
+                          help='MAAP host URL (trailing slashes are ignored)')
         parser.add_argument('--job-queue', type=str,
                           help='DPS job queue name')
         
         # External services
-        parser.add_argument('--cmss-logger-host', type=str,
-                          help='CMSS logger host URL')
-        parser.add_argument('--mmgis-host', type=str,
-                          help='MMGIS host URL')
+        parser.add_argument('--cmss-logger-host', type=normalize_base_url,
+                          help='CMSS logger host URL (trailing slashes are ignored)')
+        parser.add_argument('--mmgis-host', type=normalize_base_url,
+                          help='MMGIS host URL (trailing slashes are ignored)')
         parser.add_argument('--titiler-token-secret-name', type=str,
                           help='TiTiler token secret name')
         
@@ -660,10 +680,10 @@ class ConfigUtils:
                             help="Optional S3 prefix (folder path) within the bucket")
         parser.add_argument("--role-arn", required=True,
                             help="AWS IAM Role ARN to assume for S3 upload")
-        parser.add_argument("--cmss-logger-host", required=True,
-                            help="Host for logging pipeline messages")
-        parser.add_argument("--mmgis-host", required=True,
-                            help="Host for cataloging STAC items")
+        parser.add_argument("--cmss-logger-host", required=True, type=normalize_base_url,
+                            help="Host for logging pipeline messages (trailing slashes are ignored)")
+        parser.add_argument("--mmgis-host", required=True, type=normalize_base_url,
+                            help="Host for cataloging STAC items (trailing slashes are ignored)")
         parser.add_argument("--titiler-token-secret-name", required=True,
                             help="MAAP secret name for MMGIS host token")
         parser.add_argument("--job-queue", required=True,
@@ -680,8 +700,8 @@ class ConfigUtils:
                             help="Enable on-demand behavior (default: skip)")
         parser.add_argument("--local-download-path", default="output",
                             help="Local directory for temporary downloads")
-        parser.add_argument("--maap-host", default="api.maap-project.org",
-                            help="MAAP API host")
+        parser.add_argument("--maap-host", default="api.maap-project.org", type=normalize_base_url,
+                            help="MAAP API host (trailing slashes are ignored)")
         
         return parser
     

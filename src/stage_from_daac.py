@@ -7,7 +7,7 @@ from botocore.exceptions import ClientError
 from maap.maap import MAAP  # Confirmed import for maap-py
 from common_utils import (
     AWSUtils, MaapUtils, ConfigUtils,
-    UploadError, DownloadError, GranuleNotFoundError
+    UploadError, DownloadError, GranuleNotFoundError, normalize_base_url
 )
 
 # Configure basic logging to provide feedback on the script's progress and any errors.
@@ -38,7 +38,7 @@ def parse_arguments():
     parser.add_argument("--role-arn",
                         help="Optional AWS IAM Role ARN to assume for S3 upload. "
                              "Useful for cross-account S3 bucket access.")
-    parser.add_argument("--maap-host", default="api.maap-project.org",  # Default MAAP API host
+    parser.add_argument("--maap-host", default="api.maap-project.org", type=normalize_base_url,  # Default MAAP API host
                         help="MAAP API host. Defaults to 'api.ops.maap-project.org' if not overridden by MAAP_API_HOST env var.")
     return parser.parse_args()
 

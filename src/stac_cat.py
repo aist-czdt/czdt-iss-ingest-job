@@ -16,7 +16,7 @@ from dateutil.parser import isoparse
 from pystac_client import Client
 from urllib3.exceptions import InsecureRequestWarning
 
-from common_utils import ConfigUtils, MaapUtils, BackoffUtils
+from common_utils import ConfigUtils, MaapUtils, BackoffUtils, normalize_base_url
 from pipeline_generic import wait_for_completion
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
@@ -136,12 +136,13 @@ async def main(args):
 
     czdt_token = maap.secrets.get_secret(args.titiler_token_secret_name)
 
+    mmgis_host = normalize_base_url(args.mmgis_host)
     stac_catalog = Client.open(
-        f'{args.mmgis_host}/stac/',
+        f'{mmgis_host}/stac/',
         headers={'Authorization': czdt_token},
     )
 
-    logger.info(f'Opened STAC catalog at {args.mmgis_host}/stac/')
+    logger.info(f'Opened STAC catalog at {mmgis_host}/stac/')
 
     collection = stac_catalog.get_collection(args.stac_collection)
 
@@ -322,8 +323,8 @@ if __name__ == '__main__':
     parser.add_argument(
         '--sdap-base-url',
         required=True,
-        help='The base URL for the SDAP API',
-        type=lambda s: s.rstrip('/')
+        help='The base URL for the SDAP API (trailing slashes are ignored)',
+        type=normalize_base_url
     )
 
     parser.add_argument(
