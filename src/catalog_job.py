@@ -16,7 +16,7 @@ import pystac
 import backoff
 
 # Import existing utility functions
-from common_utils import AWSUtils, MaapUtils, LoggingUtils, normalize_base_url
+from common_utils import AWSUtils, MaapUtils, LoggingUtils, BackoffUtils, normalize_base_url
 import create_stac_items
 
 # Configure logging
@@ -126,6 +126,29 @@ def retrieve_job_status(job):
         job: MAAP DPS job object
     """
     job.retrieve_status()
+
+
+@backoff.on_exception(
+    backoff.expo,
+    Exception,
+    max_tries=8,
+    max_time=300,
+    giveup=BackoffUtils.fatal_code,
+    on_backoff=BackoffUtils.backoff_logger,
+)
+def get_parent_job(maap, parent_job_id: str):
+    """
+    Look up the parent job with retry logic.
+
+    The catalog job exists to wait on its parent, so a transient MAAP API error here
+    (e.g. a connect timeout) must not end the job before the wait loop even starts.
+    4xx responses other than 401/418/429 are treated as fatal and are not retried.
+
+    Args:
+        maap: MAAP instance
+        parent_job_id: DPS job id of the parent
+    """
+    return maap.getJob(parent_job_id)
 
 
 @backoff.on_exception(backoff.expo, RuntimeError, max_value=64, max_time=172800)
@@ -413,7 +436,7 @@ def main():
         
         # Get parent job by ID
         logger.info(f"Getting parent job: {args.parent_job_id}")
-        parent_job = maap.getJob(args.parent_job_id)
+        parent_job = get_parent_job(maap, args.parent_job_id)
         
         if not parent_job:
             raise ValueError(f"Parent job {args.parent_job_id} not found")

@@ -12,9 +12,10 @@ Tests for two catalog_job.py bugs found while inspecting a real DPS run:
 import os
 import sys
 from datetime import datetime, timezone
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pystac
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -121,3 +122,41 @@ class TestIngestCatalogToStacOgcUris:
 
         assert len(results["ogc_uris"]) == 2
         assert len(set(results["ogc_uris"])) == 2
+
+
+class TestGetParentJobRetries:
+    """
+    A real DPS run (SST-backfill-2026-09-19, 2026-09-21) died on a single ConnectTimeout from
+    maap.getJob() before the backoff-wrapped wait loop was ever reached. The lookup must retry
+    transient errors and still give up promptly on a definitive 4xx.
+    """
+
+    def test_transient_timeout_is_retried(self):
+        import requests
+
+        sentinel_job = object()
+        maap = MagicMock()
+        maap.getJob.side_effect = [
+            requests.exceptions.ConnectTimeout("timed out"),
+            requests.exceptions.ConnectTimeout("timed out"),
+            sentinel_job,
+        ]
+
+        with patch("backoff._sync.time.sleep"):  # don't actually wait between retries
+            got = catalog_job.get_parent_job(maap, "parent-id")
+
+        assert got is sentinel_job
+        assert maap.getJob.call_count == 3
+        maap.getJob.assert_called_with("parent-id")
+
+    def test_definitive_4xx_is_not_retried(self):
+        import requests
+
+        response = MagicMock(status_code=404)
+        maap = MagicMock()
+        maap.getJob.side_effect = requests.exceptions.HTTPError("not found", response=response)
+
+        with patch("backoff._sync.time.sleep"), pytest.raises(requests.exceptions.HTTPError):
+            catalog_job.get_parent_job(maap, "missing-id")
+
+        assert maap.getJob.call_count == 1
