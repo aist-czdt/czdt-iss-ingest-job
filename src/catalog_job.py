@@ -151,39 +151,72 @@ def get_parent_job(maap, parent_job_id: str):
     return maap.getJob(parent_job_id)
 
 
-@backoff.on_exception(backoff.expo, RuntimeError, max_value=64, max_time=172800)
+class ParentJobFailed(Exception):
+    """The parent job ended without succeeding (failed/dismissed/offline, or gone). Never retried."""
+
+
+# How long a parent may report 'Deleted' before we treat it as gone. The MAAP API answers 'Deleted' for a job
+# that has no status document yet, which is normal for a few seconds after submission.
+DELETED_GRACE_S = 600
+_deleted_first_seen: Dict[str, float] = {}
+
+
 def wait_for_parent_completion(parent_job):
     """
-    Wait for parent job to complete with exponential backoff.
-
-    Args:
-        parent_job: MAAP DPS job object
+    One status poll of the parent job.
 
     Raises:
-        RuntimeError: If job is still running/pending (triggers backoff)
-        ValueError: If job failed or was deleted (no retry)
+        RuntimeError: still queued/running (the caller's backoff retries)
+        ParentJobFailed: failed / dismissed / offline / deduped, or 'Deleted' for longer than DELETED_GRACE_S
+                         (the caller's backoff must give up on this)
     """
+    import time as _time
     retrieve_job_status(parent_job)
-    status = parent_job.status.lower()
-    
+    status = (parent_job.status or "").lower()
+
     logger.info(f"Parent job {parent_job.id} status: {status}")
-    
-    if status in ["failed", "deleted", "revoked"]:
+
+    if status in ["failed", "revoked", "dismissed", "offline", "deduped"]:
         error_msg = f"Parent job {parent_job.id} ended with status: {status}"
         logger.error(error_msg)
-        raise ValueError(error_msg)
-    
+        raise ParentJobFailed(error_msg)
+
+    if status == "deleted":
+        first = _deleted_first_seen.setdefault(parent_job.id, _time.monotonic())
+        if _time.monotonic() - first > DELETED_GRACE_S:
+            raise ParentJobFailed(f"Parent job {parent_job.id} has reported 'Deleted' for over {DELETED_GRACE_S}s")
+        raise RuntimeError("Parent job not visible yet (Deleted)")
+    _deleted_first_seen.pop(parent_job.id, None)
+
     if status in ["accepted", "running", "queued"]:
         logger.debug(f'Parent job {parent_job.id} status is {status}. Backing off.')
         raise RuntimeError(f"Job still running: {status}")
-    
+
     if status == "succeeded":
         logger.info(f"Parent job {parent_job.id} completed successfully")
         return parent_job
-    
+
     # Unknown status - log and retry
     logger.warning(f"Unknown parent job status: {status}. Will retry.")
-    raise ValueError(f"Unknown job status: {status}")
+    raise RuntimeError(f"Unknown job status: {status}")
+
+
+def wait_for_parent(parent_job, max_backoff: int, max_wait_time: int):
+    """
+    Poll until the parent succeeds (returns it) or ends badly (raises ParentJobFailed).
+
+    Until 2026-09 the retry wrapper here retried *every* exception - including the one meant to be terminal -
+    so a catalog job whose parent had failed polled the API every max_backoff seconds for the full max_wait_time
+    (48 h by default).
+    """
+    poll = backoff.on_exception(
+        backoff.expo,
+        Exception,
+        max_value=max_backoff,
+        max_time=max_wait_time,
+        giveup=lambda e: isinstance(e, ParentJobFailed),
+    )(lambda: wait_for_parent_completion(parent_job))
+    return poll()
 
 
 # Every call to the MAAP API is retried: under load (2026-09-22 LIS backfill, 100+ concurrent catalog jobs) the API
@@ -495,15 +528,7 @@ def main():
         print(msg)
         LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host)
         
-        # Configure backoff decorator with custom values
-        wait_func = backoff.on_exception(
-            backoff.expo, 
-            Exception, 
-            max_value=args.max_backoff,
-            max_time=args.max_wait_time
-        )(lambda: wait_for_parent_completion(parent_job))
-        
-        completed_job = wait_func()
+        completed_job = wait_for_parent(parent_job, args.max_backoff, args.max_wait_time)
         
         msg = f"Parent job {args.parent_job_id} completed successfully"
         print(msg)
@@ -559,8 +584,8 @@ def main():
         else:
             logger.info("Catalog job completed successfully")
         
-    except ValueError as e:
-        # Non-retryable errors (job failed, not found, etc.)
+    except (ValueError, ParentJobFailed) as e:
+        # Non-retryable errors (parent failed, not found, etc.)
         logger.error(f"Catalog job failed due to invalid input: {e}")
         msg = f"Catalog job failed: {e}"
         LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host if 'args' in locals() else "localhost")

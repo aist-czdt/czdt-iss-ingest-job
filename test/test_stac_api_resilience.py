@@ -133,6 +133,48 @@ class TestCatalogJobMaapApiRetries:
             assert catalog_job._download_json("https://x/catalog.json") == {"ok": 1}
 
 
+class TestWaitForParent:
+    """
+    2026-09-22: a catalog job whose parent had failed kept polling for 42+ minutes (it would have gone on for
+    the full 48 h max_wait_time) because the retry wrapper retried the exception meant to be terminal.
+    """
+
+    def _job(self, statuses):
+        import catalog_job
+        job = MagicMock(id="parent-1")
+        it = iter(statuses)
+
+        def _set():
+            job.status = next(it)
+        job.retrieve_status.side_effect = _set
+        catalog_job._deleted_first_seen.clear()
+        return job
+
+    def test_failed_parent_gives_up_immediately(self):
+        import catalog_job
+        job = self._job(["Failed", "Failed", "Failed"])
+        with pytest.raises(catalog_job.ParentJobFailed):
+            catalog_job.wait_for_parent(job, max_backoff=1, max_wait_time=60)
+        assert job.retrieve_status.call_count == 1
+
+    def test_running_then_succeeded_returns(self):
+        import catalog_job
+        job = self._job(["Accepted", "Running", "Succeeded"])
+        assert catalog_job.wait_for_parent(job, max_backoff=1, max_wait_time=60) is job
+        assert job.retrieve_status.call_count == 3
+
+    def test_deleted_is_retried_within_grace(self):
+        import catalog_job
+        job = self._job(["Deleted", "Running", "Succeeded"])
+        assert catalog_job.wait_for_parent(job, max_backoff=1, max_wait_time=60) is job
+
+    def test_dismissed_is_terminal(self):
+        import catalog_job
+        job = self._job(["Dismissed"])
+        with pytest.raises(catalog_job.ParentJobFailed):
+            catalog_job.wait_for_parent(job, max_backoff=1, max_wait_time=60)
+
+
 class TestSubmitCatalogJobRetry:
     def _args(self):
         return Namespace(collection_id="c1", concept_id=None, maap_host="h", mmgis_host="m",
