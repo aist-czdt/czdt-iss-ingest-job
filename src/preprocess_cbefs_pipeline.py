@@ -124,7 +124,8 @@ def run_localized_pipeline(preprocessed_file: str, original_args, unknown_args=N
         ('collection_id', '--collection-id'),
         ('variables', '--variables'),
         ('s3_prefix', '--s3-prefix'),
-        ('local_download_path', '--local-download-path')
+        ('local_download_path', '--local-download-path'),
+        ('catalog_job_version', '--catalog-job-version')
     ]
     
     for attr_name, arg_name in optional_args:

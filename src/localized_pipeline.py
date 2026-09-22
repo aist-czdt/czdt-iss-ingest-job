@@ -28,8 +28,17 @@ GEOSERVER_WORKSPACE = "czdt"
 GEOSERVER_USER = "ingest"
 GEOSERVER_PASSWORD_SECRET_NAME = "geoserver_secret"
 
+# Default version of czdt-iss-catalog-job to submit. Overridable per job with --catalog-job-version
+# (algorithm input `catalog_job_version`) so a catalog fix can ship without rebuilding every pipeline.
 CATALOG_JOB_VERSION = "v0.2.2"
-# CATALOG_JOB_VERSION = "catalog-fix-dev2"
+
+
+def resolve_catalog_job_version(args) -> str:
+    """Return the catalog job version to submit: the --catalog-job-version override, else the build default."""
+    override = getattr(args, 'catalog_job_version', None)
+    if override and override.strip() and override.strip().lower() != 'none':
+        return override.strip()
+    return CATALOG_JOB_VERSION
 
 def parse_arguments():
     """
@@ -365,8 +374,9 @@ def submit_catalog_job(args):
     """
     # Determine concept_id: use concept_id if provided, otherwise fall back to collection_id
     concept_id = getattr(args, 'concept_id', None) or args.collection_id
-    
-    logger.info(f"SUBMIT_CATALOG_JOB - Args: concept_id='{concept_id}', collection_id='{args.collection_id}', maap_host='{args.maap_host}', mmgis_host='{args.mmgis_host}', upsert='{getattr(args, 'upsert', False)}'")
+    catalog_job_version = resolve_catalog_job_version(args)
+
+    logger.info(f"SUBMIT_CATALOG_JOB - Args: concept_id='{concept_id}', collection_id='{args.collection_id}', maap_host='{args.maap_host}', mmgis_host='{args.mmgis_host}', upsert='{getattr(args, 'upsert', False)}', catalog_job_version='{catalog_job_version}'")
     logger.info("Submitting catalog job to handle STAC API ingestion")
     
     try:
@@ -384,7 +394,7 @@ def submit_catalog_job(args):
         job_params = {
             "identifier": job_tag,
             "algo_id": "czdt-iss-catalog-job",
-            "version": CATALOG_JOB_VERSION,
+            "version": catalog_job_version,
             "queue": "maap-dps-czdt-worker-8gb",
             "parent_job_id": current_job_id,
             "mmgis_host": args.mmgis_host,
@@ -401,7 +411,7 @@ def submit_catalog_job(args):
         # Submit catalog job
         catalog_job = maap.submitJob(**job_params)
         
-        msg = f"Catalog job {catalog_job.id} [{job_tag}] submitted to process outputs from parent job {current_job_id}"
+        msg = f"Catalog job {catalog_job.id} [{job_tag}] (czdt-iss-catalog-job:{catalog_job_version}) submitted to process outputs from parent job {current_job_id}"
         print(msg)
         LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host)
         logger.info(f"Catalog job submitted: {catalog_job.id}")

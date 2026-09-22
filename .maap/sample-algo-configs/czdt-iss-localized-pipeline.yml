@@ -86,6 +86,10 @@ inputs:
     description: Enable upsert mode for catalog job (update existing items instead of failing on conflicts)
     name: upsert
     required: false
+  - default: ""
+    description: Version of czdt-iss-catalog-job to submit for STAC ingestion (default - the version pinned in this build)
+    name: catalog_job_version
+    required: false
   - default: none
     description: Concept ID for zarr2cog and catalog operations (overrides collection-id for these steps)
     name: concept_id

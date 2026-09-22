@@ -43,6 +43,7 @@ maap_host=$(jq -r '.params.maap_host // "api.maap-project.org"' _job.json)
 steps=$(jq -r '.params.steps // "all"' _job.json)
 geoserver_host=$(jq -r '.params.geoserver_host // empty' _job.json)
 upsert=$(jq -r '.params.upsert // "false"' _job.json)
+catalog_job_version=$(jq -r '.params.catalog_job_version // empty' _job.json)
 concept_id=$(jq -r '.params.concept_id // empty' _job.json)
 time_coord=$(jq -r '.params.time_coord // "time"' _job.json)
 lat_coord=$(jq -r '.params.lat_coord // "lat"' _job.json)
@@ -163,6 +164,10 @@ if [[ -n "${geoserver_host}" ]]; then
 fi
 if [[ "${upsert}" == "true" ]]; then
     args+=(--upsert)
+fi
+# Registered defaults come through as the literal string "none"; treat it like unset
+if [[ -n "${catalog_job_version}" && "${catalog_job_version}" != "none" ]]; then
+    args+=(--catalog-job-version "${catalog_job_version}")
 fi
 if [[ -n "${concept_id}" ]]; then
     args+=(--concept-id "${concept_id}")

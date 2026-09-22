@@ -702,7 +702,10 @@ class ConfigUtils:
                             help="Local directory for temporary downloads")
         parser.add_argument("--maap-host", default="api.maap-project.org", type=normalize_base_url,
                             help="MAAP API host (trailing slashes are ignored)")
-        
+        parser.add_argument("--catalog-job-version", default=None,
+                            help="Version of czdt-iss-catalog-job to submit for STAC ingestion "
+                                 "(default: the version pinned in localized_pipeline.CATALOG_JOB_VERSION)")
+
         return parser
     
     @staticmethod
