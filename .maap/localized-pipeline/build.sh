@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Fail the build on the first error. Without this a failed transformers install still produced a "successful"
+# registration whose jobs all died with "No module named 'czdt_iss_transformers'" (v0.2.6, 2026-09-22).
+set -eo pipefail
 
 # Get current location of build script
 basedir=$( cd "$(dirname "$0")" ; pwd -P )
@@ -47,4 +50,8 @@ conda run -n ingest pip install 'maap-py<5'
 
 # For input parsing
 conda run -n ingest pip install jq
+
+# Smoke-test the environment so a broken install fails the build instead of every job
+echo "Verifying the ingest environment..."
+conda run -n ingest python -c "import czdt_iss_transformers.cf2zarr, czdt_iss_transformers.zarr2cog, czdt_iss_transformers.zarr_concat, czdt_iss_transformers.preprocessors.lis.lis_preprocessor, maap.maap, pystac, backoff, jq; print('ingest environment OK')"
 echo "Build complete!"
