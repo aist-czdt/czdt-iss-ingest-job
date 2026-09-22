@@ -389,8 +389,8 @@ def submit_catalog_job(args):
             logger.warning("Could not get current job ID, catalog job may not work properly")
             current_job_id = "unknown"
         
-        # Get MAAP instance
-        maap = MaapUtils.get_maap_instance(args.maap_host)
+        # Get MAAP instance (retried: client construction calls the API, which times out under load)
+        maap = _get_maap_with_retry(args.maap_host)
         job_tag = MaapUtils.get_job_tag() or f"CMR_subscriber_ingest_{concept_id}"  # Use concept/coll id for tag for better grouping
         
         # Prepare catalog job parameters
@@ -441,6 +441,14 @@ def submit_catalog_job(args):
 )
 def _submit_catalog_job_with_retry(maap, job_params):
     return maap.submitJob(**job_params)
+
+
+@backoff.on_exception(
+    backoff.expo, Exception, max_tries=6, max_time=600,
+    giveup=BackoffUtils.fatal_code, on_backoff=BackoffUtils.backoff_logger,
+)
+def _get_maap_with_retry(maap_host):
+    return MaapUtils.get_maap_instance(maap_host)
 
 def main():
     """

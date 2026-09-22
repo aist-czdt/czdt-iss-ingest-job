@@ -91,6 +91,48 @@ class TestUpsertCollectionItems:
             assert create_stac_items.upsert_collection_items("http://stac", "tok", "c1", [], True) is not None
 
 
+class TestCatalogJobMaapApiRetries:
+    """
+    100 concurrent catalog jobs against api.maap-project.org (2026-09-22): 35 ConnectTimeouts at client
+    construction and 34 'TypeError: exceptions must derive from BaseException' from maap-py's
+    Secrets.get_secret, which raises a str. Both must be retried.
+    """
+
+    def test_get_maap_retries_connect_timeout(self):
+        import catalog_job
+        with patch.object(catalog_job.MaapUtils, "get_maap_instance",
+                          side_effect=[requests.exceptions.ConnectTimeout("t"), "client"]) as g:
+            assert catalog_job.get_maap("host") == "client"
+        assert g.call_count == 2
+
+    def test_secret_fetch_retries_maap_py_str_raise(self):
+        import catalog_job
+        maap = MagicMock()
+        maap.secrets.get_secret.side_effect = [TypeError("exceptions must derive from BaseException"), "tok"]
+        with patch.object(catalog_job.MaapUtils, "get_maap_instance", return_value=maap):
+            assert catalog_job.get_authentication_token("secret", "host") == "tok"
+        assert maap.secrets.get_secret.call_count == 2
+
+    def test_load_catalog_retries_s3_throttle(self):
+        import catalog_job
+        import pystac
+        cat = MagicMock(spec=pystac.Catalog)
+        cat.walk.side_effect = [pystac.errors.STACError("HREF does not resolve"), iter([])]
+        with patch.object(catalog_job.pystac.Catalog, "from_dict", return_value=cat):
+            assert catalog_job.load_catalog({"id": "c"}, "https://x/catalog.json") is cat
+        assert cat.walk.call_count == 2
+
+    def test_download_json_retries(self):
+        import catalog_job
+        good = MagicMock()
+        good.__enter__ = lambda s: s
+        good.__exit__ = lambda s, *a: False
+        good.read = lambda: '{"ok": 1}'
+        with patch.object(catalog_job.fsspec, "open", side_effect=[FileNotFoundError("glob characters"), good]), \
+             patch.object(catalog_job.json, "load", return_value={"ok": 1}):
+            assert catalog_job._download_json("https://x/catalog.json") == {"ok": 1}
+
+
 class TestSubmitCatalogJobRetry:
     def _args(self):
         return Namespace(collection_id="c1", concept_id=None, maap_host="h", mmgis_host="m",

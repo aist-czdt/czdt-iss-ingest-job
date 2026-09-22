@@ -186,22 +186,42 @@ def wait_for_parent_completion(parent_job):
     raise ValueError(f"Unknown job status: {status}")
 
 
+# Every call to the MAAP API is retried: under load (2026-09-22 LIS backfill, 100+ concurrent catalog jobs) the API
+# returns connect timeouts, and maap-py's Secrets.get_secret raises a *str* on any error, which Python surfaces as
+# "TypeError: exceptions must derive from BaseException" - so TypeError has to be retried as well.
+_maap_api_retry = backoff.on_exception(
+    backoff.expo, Exception, max_tries=8, max_time=600,
+    giveup=BackoffUtils.fatal_code, on_backoff=BackoffUtils.backoff_logger,
+)
+
+
+@_maap_api_retry
+def get_maap(maap_host: str):
+    """Build a MAAP client with retry (construction itself calls the API for its environment config)."""
+    return MaapUtils.get_maap_instance(maap_host)
+
+
+@_maap_api_retry
+def _get_secret(maap, token_secret_name: str) -> str:
+    return maap.secrets.get_secret(token_secret_name)
+
+
 def get_authentication_token(token_secret_name: str, maap_host: str) -> str:
     """
-    Retrieve authentication token from AWS Secrets Manager via MAAP.
-    
+    Retrieve authentication token from AWS Secrets Manager via MAAP (retried).
+
     Args:
         token_secret_name: Name of the secret in AWS Secrets Manager
         maap_host: MAAP host to use for secret retrieval
-        
+
     Returns:
         Authentication token string
     """
     logger.debug(f"Retrieving authentication token from secret: {token_secret_name}")
-    
+
     try:
-        maap = MaapUtils.get_maap_instance(maap_host)
-        token = maap.secrets.get_secret(token_secret_name)
+        maap = get_maap(maap_host)
+        token = _get_secret(maap, token_secret_name)
         logger.debug("Successfully retrieved authentication token")
         return token
     except Exception as e:
@@ -223,6 +243,35 @@ def get_s3_presigned_url(maap, bucket_name: str, object_key: str) -> str:
         Presigned URL string
     """
     return maap.aws.s3_signed_url(bucket_name, object_key)['url']
+
+
+_s3_read_retry = backoff.on_exception(
+    backoff.expo, Exception, max_tries=6, max_time=600, on_backoff=BackoffUtils.backoff_logger,
+)
+
+
+@_s3_read_retry
+def _download_json(url: str) -> Dict[str, Any]:
+    with fsspec.open(url, "r") as f:
+        return json.load(f)
+
+
+@_s3_read_retry
+def load_catalog(catalog_data: Dict[str, Any], presigned_url: str) -> pystac.Catalog:
+    """
+    Build the PySTAC catalog and resolve every child collection and item from S3.
+
+    Resolving the children fetches collection.json / item json through presigned URLs; under load S3 returns
+    503 SlowDown, which pystac surfaces as STACError ("HREF ... does not resolve") or fsspec as
+    FileNotFoundError. Loading is idempotent, so the whole step is retried.
+    """
+    catalog = pystac.Catalog.from_dict(catalog_data)
+    catalog.set_self_href(presigned_url)
+    catalog.make_all_asset_hrefs_absolute()
+    for _, collections, _ in catalog.walk():
+        for coll in collections:
+            list(coll.get_items())
+    return catalog
 
 
 def get_catalog_from_parent_job(parent_job, maap_host: str) -> Dict[str, Any]:
@@ -250,15 +299,14 @@ def get_catalog_from_parent_job(parent_job, maap_host: str) -> Dict[str, Any]:
         logger.info(f"Found STAC catalog file: {stac_cat_file}")
 
         # Generate presigned URL for catalog file
-        maap = MaapUtils.get_maap_instance(maap_host)
+        maap = get_maap(maap_host)
         bucket_name, catalog_path = AWSUtils.parse_s3_path(stac_cat_file)
         presigned_url = get_s3_presigned_url(maap, bucket_name, catalog_path)
-        
+
         logger.debug(f"Generated presigned URL for catalog.json")
-        
-        # Download and parse catalog
-        with fsspec.open(presigned_url, "r") as f:
-            catalog_data = json.load(f)
+
+        # Download and parse catalog (retried: S3 answers 503 SlowDown under a burst of jobs)
+        catalog_data = _download_json(presigned_url)
         
         # Write local copy for reference
         with open("catalog.json", 'w') as fr:
@@ -431,9 +479,9 @@ def main():
     try:
         args = parse_arguments()
         
-        # Get MAAP instance
-        maap = MaapUtils.get_maap_instance(args.maap_host)
-        
+        # Get MAAP instance (retried)
+        maap = get_maap(args.maap_host)
+
         # Get parent job by ID
         logger.info(f"Getting parent job: {args.parent_job_id}")
         parent_job = get_parent_job(maap, args.parent_job_id)
@@ -464,11 +512,9 @@ def main():
         # Get catalog from parent job outputs
         catalog_data, presigned_url = get_catalog_from_parent_job(completed_job, args.maap_host)
         
-        # Create PySTAC catalog object
-        catalog = pystac.Catalog.from_dict(catalog_data)
-        catalog.set_self_href(presigned_url)
-        catalog.make_all_asset_hrefs_absolute()
-        
+        # Create PySTAC catalog object and resolve its children from S3 (retried)
+        catalog = load_catalog(catalog_data, presigned_url)
+
         logger.info(f"Created PySTAC catalog: '{catalog.id}' - {catalog.description}")
         
         # Process catalog items
