@@ -95,6 +95,30 @@ class TestSubmitCatalogJobVersion:
         assert kwargs["parent_job_id"] == "parent-id"
 
 
+class TestZarrToCogArgs:
+    """
+    czdt-iss-transformers' zarr2cog.main reads args.source_granule_id unconditionally (since the 2026-09-15
+    cog-source merge) inside a try/except that only logs, so a namespace without the attribute produces zero
+    STAC items and no catalog.json. Non-DAAC inputs (LIS, CBEFS, S3) have no granule; the attribute must still exist.
+    """
+
+    def _cog_args(self, pipeline_args):
+        with patch.object(localized_pipeline.zarr2cog, "main", create=True) as z2c, \
+             patch.object(localized_pipeline.Path, "glob", return_value=[]):
+            localized_pipeline.convert_zarr_to_cog_local(pipeline_args, "output/x.zarr")
+        return z2c.call_args.args[0]
+
+    def test_attribute_present_and_none_without_granule(self):
+        cog = self._cog_args(Namespace(collection_id="daily_flood_prediction", concept_id=None))
+        assert hasattr(cog, "source_granule_id")
+        assert cog.source_granule_id is None
+        assert cog.concept_id == "daily_flood_prediction"
+
+    def test_granule_id_passed_through(self):
+        cog = self._cog_args(Namespace(collection_id="C1", concept_id=None, source_granule_id="G123"))
+        assert cog.source_granule_id == "G123"
+
+
 class TestPreprocessPipelinesForwardTheOverride:
     def test_lis_forwards_catalog_job_version(self):
         args = Namespace(s3_bucket="b", role_arn="r", zarr_config_url="z", maap_host="h", mmgis_host="m",

@@ -297,6 +297,10 @@ def convert_zarr_to_cog_local(args, zarr_path: str) -> List[str]:
     print(f"Running Zarr to COG conversion")
     
     try:
+        # source_granule_id must ALWAYS be present on the namespace: czdt-iss-transformers >= the 2026-09-15
+        # "cog-source" merge reads args.source_granule_id unconditionally inside a try/except that only logs,
+        # so a missing attribute silently yields zero STAC items and no catalog.json (seen on LIS/S3 inputs,
+        # which have no DAAC granule). None is handled downstream (no SourceGranule property).
         cog_args = SimpleNamespace(
             zarr=zarr_path,
             concept_id=concept_id,
@@ -305,10 +309,8 @@ def convert_zarr_to_cog_local(args, zarr_path: str) -> List[str]:
             latitude=lat_coord,
             longitude=lon_coord,
             zarr_access="stage",
+            source_granule_id=getattr(args, 'source_granule_id', None) or None,
         )
-
-        if hasattr(args, 'source_granule_id') and args.source_granule_id:
-            cog_args.source_granule_id = args.source_granule_id
 
         # Call zarr2cog main function directly
         zarr2cog.main(cog_args)
