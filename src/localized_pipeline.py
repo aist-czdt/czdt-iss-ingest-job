@@ -6,10 +6,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import List
 
+import backoff
 import pystac
 from geoserver_ingest import GeoServerClient
 from common_utils import (
-    MaapUtils, LoggingUtils, ConfigUtils, AWSUtils,
+    MaapUtils, LoggingUtils, ConfigUtils, AWSUtils, BackoffUtils,
     GranuleNotFoundError, DownloadError, UploadError
 )
 from stage_from_daac import search_and_download_granule
@@ -30,7 +31,7 @@ GEOSERVER_PASSWORD_SECRET_NAME = "geoserver_secret"
 
 # Default version of czdt-iss-catalog-job to submit. Overridable per job with --catalog-job-version
 # (algorithm input `catalog_job_version`) so a catalog fix can ship without rebuilding every pipeline.
-CATALOG_JOB_VERSION = "v0.2.2"
+CATALOG_JOB_VERSION = "v0.2.5"
 
 
 def resolve_catalog_job_version(args) -> str:
@@ -410,23 +411,36 @@ def submit_catalog_job(args):
         if hasattr(args, 'upsert') and args.upsert:
             job_params["upsert"] = "true"
         
-        # Submit catalog job
-        catalog_job = maap.submitJob(**job_params)
-        
+        # Submit catalog job (retried: the MAAP API has been seen to time out under a burst of submissions)
+        catalog_job = _submit_catalog_job_with_retry(maap, job_params)
+        if not getattr(catalog_job, 'id', None):
+            raise RuntimeError(f"MAAP accepted no job id: {MaapUtils.job_error_message(catalog_job)}")
+
         msg = f"Catalog job {catalog_job.id} [{job_tag}] (czdt-iss-catalog-job:{catalog_job_version}) submitted to process outputs from parent job {current_job_id}"
         print(msg)
         LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host)
         logger.info(f"Catalog job submitted: {catalog_job.id}")
-        
+
         return catalog_job
-        
+
     except Exception as e:
+        # A pipeline whose products never reach STAC is a failed pipeline; make it visible instead of
+        # completing with a warning (2026-09-22: a timed-out submission left an hour uncataloged with no
+        # failed job anywhere). The staged outputs remain, so a catalog job can be submitted for this
+        # parent by hand.
         logger.error(f"Failed to submit catalog job: {e}")
-        # Don't fail the pipeline for catalog job submission failure
-        msg = f"Warning: Failed to submit catalog job: {e}. Products may not be cataloged to STAC API."
+        msg = f"Failed to submit catalog job after retries: {e}. Products are staged but NOT cataloged to STAC API."
         print(msg)
         LoggingUtils.cmss_logger(str(msg), args.cmss_logger_host)
-        return None
+        raise RuntimeError(msg) from e
+
+
+@backoff.on_exception(
+    backoff.expo, Exception, max_tries=6, max_time=600,
+    giveup=BackoffUtils.fatal_code, on_backoff=BackoffUtils.backoff_logger,
+)
+def _submit_catalog_job_with_retry(maap, job_params):
+    return maap.submitJob(**job_params)
 
 def main():
     """
