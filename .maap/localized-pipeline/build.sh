@@ -54,4 +54,8 @@ conda run -n ingest pip install jq
 # Smoke-test the environment so a broken install fails the build instead of every job
 echo "Verifying the ingest environment..."
 conda run -n ingest python -c "import czdt_iss_transformers.cf2zarr, czdt_iss_transformers.zarr2cog, czdt_iss_transformers.zarr_concat, czdt_iss_transformers.preprocessors.lis.lis_preprocessor, maap.maap, pystac, backoff, jq; print('ingest environment OK')"
+
+# Prove the installed stack writes COGs with the right numbers (see verify_cog_roundtrip.py)
+echo "Verifying Zarr -> COG value roundtrip..."
+conda run -n ingest --live-stream python "${basedir}/verify_cog_roundtrip.py"
 echo "Build complete!"
