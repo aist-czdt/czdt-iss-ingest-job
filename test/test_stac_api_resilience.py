@@ -200,3 +200,39 @@ class TestSubmitCatalogJobRetry:
              patch.object(localized_pipeline.LoggingUtils, "cmss_logger"), \
              pytest.raises(RuntimeError):
             localized_pipeline.submit_catalog_job(self._args())
+
+
+class TestNonFiniteValues:
+    """
+    2026-09-23: 191 LIS catalog jobs failed with "Out of range float values are not JSON compliant: inf" from
+    inside requests, after six pointless retries, without saying which field. Non-finite floats in descriptive
+    fields are dropped with a log line; in bbox/geometry/extent they are a hard, named error; and a client-side
+    JSON error is never retried.
+    """
+
+    def test_descriptive_non_finite_is_dropped_and_named(self, capsys):
+        d = {"id": "x", "bbox": [0, 0, 1, 1], "properties": {"var:vmax": float("inf"), "keep": 1.0},
+             "assets": {"asset": {"raster:bands": [{"statistics": {"maximum": float("nan"), "minimum": 0.0}}]}}}
+        out = create_stac_items.sanitize_stac_dict(d, "item x")
+        assert "var:vmax" not in out["properties"] and out["properties"]["keep"] == 1.0
+        assert "maximum" not in out["assets"]["asset"]["raster:bands"][0]["statistics"]
+        assert "var:vmax=inf" in capsys.readouterr().out
+
+    def test_structural_non_finite_raises_with_path(self):
+        d = {"id": "c", "extent": {"spatial": {"bbox": [[-180.0, float("-inf"), 180.0, 90.0]]}}}
+        with pytest.raises(create_stac_items.StacApiError) as ei:
+            create_stac_items.sanitize_stac_dict(d, "collection c")
+        assert "extent.spatial.bbox[0][1]=-inf" in str(ei.value)
+
+    def test_proj_fields_are_structural(self):
+        d = {"id": "x", "bbox": [0, 0, 1, 1], "properties": {"proj:transform": [0.01, 0, float("-inf"), 0, -0.01, 43.0]}}
+        with pytest.raises(create_stac_items.StacApiError) as ei:
+            create_stac_items.sanitize_stac_dict(d, "item x")
+        assert "properties.proj:transform[2]=-inf" in str(ei.value)
+
+    def test_invalid_json_error_is_not_retried(self):
+        with patch.object(create_stac_items.requests, "post",
+                          side_effect=requests.exceptions.InvalidJSONError("inf")) as post, \
+             pytest.raises(create_stac_items.StacApiError):
+            create_stac_items.upsert_collection_items("http://stac", "tok", "c1", [], upsert_items=True)
+        assert post.call_count == 1

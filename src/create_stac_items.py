@@ -3,6 +3,8 @@
 import requests
 import json
 import logging
+import math
+import re
 import backoff
 import pystac
 from pystac import Collection, ItemCollection, SpatialExtent
@@ -15,14 +17,82 @@ logger.setLevel(logging.DEBUG)
 # 3 of 24 jobs lost items to a single ConnectTimeout each). Every call to it is retried with backoff, and a call
 # that still fails raises instead of being reported as a normal answer.
 STAC_REQUEST_TIMEOUT_S = 60
+# Errors raised before a request is sent (bad JSON payload, bad URL) are not transient: never retry them.
+_CLIENT_SIDE_ERRORS = (requests.exceptions.InvalidJSONError, requests.exceptions.InvalidURL,
+                       requests.exceptions.MissingSchema, requests.exceptions.InvalidSchema)
+
+
+def _give_up(e: Exception) -> bool:
+    if isinstance(e, _CLIENT_SIDE_ERRORS):
+        return True
+    resp = getattr(e, 'response', None)
+    return resp is not None and 400 <= resp.status_code < 500 and resp.status_code != 429
+
+
 _stac_retry = backoff.on_exception(
-    backoff.expo, requests.exceptions.RequestException, max_tries=6, max_time=600,
-    giveup=lambda e: e.response is not None and 400 <= e.response.status_code < 500 and e.response.status_code != 429,
+    backoff.expo, requests.exceptions.RequestException, max_tries=6, max_time=600, giveup=_give_up,
 )
 
 
 class StacApiError(RuntimeError):
     """A STAC API call failed after retries, or returned an error status."""
+
+
+def find_non_finite(obj, path=""):
+    """Yield (json_path, value) for every inf/nan float in a nested dict/list."""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            yield from find_non_finite(v, f"{path}.{k}" if path else str(k))
+    elif isinstance(obj, (list, tuple)):
+        for i, v in enumerate(obj):
+            yield from find_non_finite(v, f"{path}[{i}]")
+    elif isinstance(obj, float) and (math.isinf(obj) or math.isnan(obj)):
+        yield path, obj
+
+
+# Fields whose values position the data; a non-finite number here means the georeferencing is wrong and the
+# record must not be written. Everything else (properties, asset metadata, summaries) is descriptive and the
+# offending value is dropped instead, since JSON cannot carry inf/nan at all.
+_STRUCTURAL_FIELDS = ("bbox", "geometry", "extent")
+
+
+def _is_structural(path: str) -> bool:
+    top = path.split(".")[0].split("[")[0]
+    return top in _STRUCTURAL_FIELDS or ".proj:" in path  # proj:bbox / proj:transform / proj:geometry
+
+
+def _drop_path(obj, path):
+    parts = [p for p in re.split(r"\.|\[|\]", path) if p != ""]
+    parent = obj
+    for part in parts[:-1]:
+        parent = parent[int(part)] if isinstance(parent, list) else parent[part]
+    last = parts[-1]
+    if isinstance(parent, list):
+        parent[int(last)] = None
+    else:
+        del parent[last]
+
+
+def sanitize_stac_dict(d: dict, label: str) -> dict:
+    """
+    Make a STAC dict JSON-serialisable: drop non-finite floats from descriptive fields (logged one by one) and
+    raise StacApiError naming the exact path if one sits in bbox / geometry / extent.
+
+    Motivating case (2026-09-23, LIS ROUTING files): every SurfElev collection POST failed with
+    "Out of range float values are not JSON compliant: inf" and nothing in the log said which field.
+    """
+    bad = list(find_non_finite(d))
+    if not bad:
+        return d
+    structural = [(pth, v) for pth, v in bad if _is_structural(pth)]
+    if structural:
+        where = ", ".join(f"{pth}={v}" for pth, v in structural[:8])
+        raise StacApiError(f"{label} has non-finite coordinates and cannot be cataloged: {where}")
+    for pth, v in bad:
+        print(f"WARNING: {label}: dropping non-finite value {pth}={v} (not representable in JSON)")
+        logger.warning(f"{label}: dropping non-finite value {pth}={v}")
+        _drop_path(d, pth)
+    return d
 
 
 def get_min_max_dates_from_collections(collection1: pystac.Collection, collection2: pystac.Collection):
@@ -147,7 +217,7 @@ def upsert_collection(mmgis_url, mmgis_token, collection_id, collection, collect
             try:
                 response = _stac_send(
                     'put', f"{mmgis_url}/stac/collections/{collection_id}", mmgis_token,
-                    json=remote_collection.to_dict(),
+                    json=sanitize_stac_dict(remote_collection.to_dict(), f"collection {collection_id}"),
                 )
                 response.raise_for_status()
             except requests.RequestException as e:
@@ -166,7 +236,8 @@ def upsert_collection(mmgis_url, mmgis_token, collection_id, collection, collect
 
         try:
             # Insert collection
-            response = _stac_send('post', f'{mmgis_url}/stac/collections', mmgis_token, json=collection.to_dict())
+            payload = sanitize_stac_dict(collection.to_dict(), f"collection {collection_id}")
+            response = _stac_send('post', f'{mmgis_url}/stac/collections', mmgis_token, json=payload)
         except requests.RequestException as e:
             raise StacApiError(f"Error creating collection {collection_id}: {e}") from e
 
@@ -233,4 +304,4 @@ def upsert_collection_items(mmgis_url, mmgis_token, collection_id, collection_it
 
 
 def prepare_bulk_items_dict(items_by_id: dict) -> dict:
-    return {item_id: item.to_dict() for item_id, item in items_by_id.items()}
+    return {item_id: sanitize_stac_dict(item.to_dict(), f"item {item_id}") for item_id, item in items_by_id.items()}
