@@ -1,6 +1,6 @@
 algorithm_description: CZDT ISS CBEFS Preprocessing Pipeline - Runs CBEFS data preprocessing with regridding followed by the full localized pipeline
 algorithm_name: czdt-iss-preprocess-cbefs
-algorithm_version: localized-pipeline
+algorithm_version: v0.2.11
 build_command: czdt-iss-ingest-job/.maap/localized-pipeline/build.sh
 disk_space: 50GB
 docker_container_url: mas.maap-project.org/root/maap-workspaces/custom_images/maap_base:v4.2.0
@@ -71,6 +71,10 @@ inputs:
   - default: ""
     description: Version of czdt-iss-catalog-job to submit for STAC ingestion (default - the version pinned in this build)
     name: catalog_job_version
+    required: false
+  - default: end
+    description: When to submit the catalog child job - end (after the COGs are written) or start (before staging, so it catalogs within seconds of this job finishing)
+    name: catalog_submit_stage
     required: false
   - default: none
     description: Concept ID for zarr2cog and catalog operations (overrides collection-id for these steps)
