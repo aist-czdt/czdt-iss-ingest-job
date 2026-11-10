@@ -42,7 +42,7 @@ attrs = {"units": "kelvin", "valid_min": -32767, "valid_max": 32767, "coordinate
 ds = xr.Dataset({"analysed_sst": (("time", "lat", "lon"), vals, attrs)},
                 coords={"time": [np.datetime64("2018-09-14T09:00:00")], "lat": lat, "lon": lon})
 ds["analysed_sst"] = ds["analysed_sst"].chunk({"time": 24, "lat": 100, "lon": 100})
-ds.to_zarr("sst.zarr", mode="w-", encoding={"analysed_sst": {"compressor": BloscCodec(cname="blosclz", clevel=9)}},
+ds.to_zarr("sst.zarr", mode="w-", encoding={"analysed_sst": {"compressors": [BloscCodec(cname="blosclz", clevel=9)]}},
            consolidated=True, write_empty_chunks=False)
 
 
