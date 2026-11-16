@@ -145,7 +145,7 @@ def get_enabled_steps(steps_arg: str, input_type: str) -> List[str]:
     """
     if steps_arg == 'all':
         if input_type == "daac":
-            return ['stage', 'netcdf2zarr', 'zarr2cog', 'catalog']
+            return ['stage', 'netcdf2zarr', 'zarr2cog', 'catalog', 'cog2zarr']
         elif input_type == "s3_netcdf" or input_type == "netcdf":
             return ['netcdf2zarr', 'zarr2cog', 'catalog']
         elif input_type == "s3_zarr":
@@ -154,7 +154,7 @@ def get_enabled_steps(steps_arg: str, input_type: str) -> List[str]:
             return ['catalog']
     else:
         steps = [step.strip() for step in steps_arg.split(',')]
-        valid_steps = ['stage', 'netcdf2zarr', 'concat', 'zarr2cog', 'catalog']
+        valid_steps = ['stage', 'netcdf2zarr', 'concat', 'zarr2cog', 'catalog', 'cog2zarr']
         invalid_steps = [step for step in steps if step not in valid_steps]
         if invalid_steps:
             raise ValueError(f"Invalid steps: {invalid_steps}. Valid steps: {valid_steps}")
@@ -573,7 +573,7 @@ def main():
                 current_output, source_granule_id = stage_from_daac_local(args, maap)
                 args.source_granule_id = source_granule_id
             
-            if 'netcdf2zarr' in enabled_steps and current_output and is_geotiff(current_output):
+            if 'cog2zarr' in enabled_steps and current_output and is_geotiff(current_output):
                 # GeoTIFF granules (e.g. OPERA DSWx) take the place of the netcdf2zarr step with cog2zarr, which
                 # always writes time/latitude/longitude and one full-grid slice per granule
                 logger.info(f"GeoTIFF granule detected, converting with cog2zarr: {current_output}")
@@ -638,7 +638,7 @@ def main():
                 os.makedirs("output", exist_ok=True)
                 file_name = os.path.basename(gpkg_path)
                 
-                local_file_path = f"output/ondemand_{datetime.datetime.now().strftime("%Y%m%d%H%M%S")}_{file_name}"
+                local_file_path = f"output/ondemand_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{file_name}"
                 s3_client.download_file(bucket_name, gpkg_path, local_file_path)
                 
                 print(f"File '{gpkg_path}' downloaded successfully to '{local_file_path}'")
