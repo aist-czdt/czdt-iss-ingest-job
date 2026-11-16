@@ -75,7 +75,8 @@ def parse_arguments():
         '--steps',
         type=str,
         default='all',
-        help='Comma-separated list of steps to run: stage,netcdf2zarr,concat,zarr2cog,catalog (default: all)'
+        help='Comma-separated list of steps to run: stage,netcdf2zarr,cog2zarr,concat,zarr2cog,catalog (default: all). '
+             'A GeoTIFF granule is converted with cog2zarr when either netcdf2zarr or cog2zarr is listed'
     )
     
     # Note: transformers-path argument removed - using direct module imports
@@ -145,7 +146,7 @@ def get_enabled_steps(steps_arg: str, input_type: str) -> List[str]:
     """
     if steps_arg == 'all':
         if input_type == "daac":
-            return ['stage', 'netcdf2zarr', 'zarr2cog', 'catalog', 'cog2zarr']
+            return ['stage', 'netcdf2zarr', 'cog2zarr', 'zarr2cog', 'catalog']
         elif input_type == "s3_netcdf" or input_type == "netcdf":
             return ['netcdf2zarr', 'zarr2cog', 'catalog']
         elif input_type == "s3_zarr":
@@ -154,7 +155,7 @@ def get_enabled_steps(steps_arg: str, input_type: str) -> List[str]:
             return ['catalog']
     else:
         steps = [step.strip() for step in steps_arg.split(',')]
-        valid_steps = ['stage', 'netcdf2zarr', 'concat', 'zarr2cog', 'catalog', 'cog2zarr']
+        valid_steps = ['stage', 'netcdf2zarr', 'cog2zarr', 'concat', 'zarr2cog', 'catalog']
         invalid_steps = [step for step in steps if step not in valid_steps]
         if invalid_steps:
             raise ValueError(f"Invalid steps: {invalid_steps}. Valid steps: {valid_steps}")
@@ -573,13 +574,16 @@ def main():
                 current_output, source_granule_id = stage_from_daac_local(args, maap)
                 args.source_granule_id = source_granule_id
             
-            if 'cog2zarr' in enabled_steps and current_output and is_geotiff(current_output):
-                # GeoTIFF granules (e.g. OPERA DSWx) take the place of the netcdf2zarr step with cog2zarr, which
-                # always writes time/latitude/longitude and one full-grid slice per granule
-                logger.info(f"GeoTIFF granule detected, converting with cog2zarr: {current_output}")
-                current_output = convert_geotiff_to_zarr_local(args, current_output)
-                args.time_coord, args.lat_coord, args.lon_coord = 'time', 'latitude', 'longitude'
-                args.cog_output_prefix = args.granule_id
+            if current_output and is_geotiff(current_output):
+                # GeoTIFF granules (e.g. OPERA DSWx) are converted with cog2zarr and must never reach cf2zarr,
+                # which only reads NetCDF. Either to-Zarr step name enables the conversion, so job configs that
+                # list only netcdf2zarr in --steps still work. cog2zarr always writes time/latitude/longitude
+                # and one full-grid slice per granule.
+                if 'cog2zarr' in enabled_steps or 'netcdf2zarr' in enabled_steps:
+                    logger.info(f"GeoTIFF granule detected, converting with cog2zarr: {current_output}")
+                    current_output = convert_geotiff_to_zarr_local(args, current_output)
+                    args.time_coord, args.lat_coord, args.lon_coord = 'time', 'latitude', 'longitude'
+                    args.cog_output_prefix = args.granule_id
             elif 'netcdf2zarr' in enabled_steps and current_output:
                 # Temporarily set input_netcdf for convert function
                 args.input_netcdf = current_output

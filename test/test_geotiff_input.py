@@ -148,11 +148,11 @@ class TestCogOutputPrefix:
 class TestDaacDispatch:
     """main() routes a staged GeoTIFF to cog2zarr and a staged NetCDF to cf2zarr."""
 
-    def _run_main(self, staged_file):
+    def _run_main(self, staged_file, steps="stage,netcdf2zarr,zarr2cog"):
         argv = ["localized_pipeline.py", "--granule-id", GRANULE, "--collection-id", "C1-POCLOUD",
                 "--s3-bucket", "b", "--role-arn", ROLE, "--cmss-logger-host", "http://c", "--mmgis-host", "http://m",
                 "--titiler-token-secret-name", "t", "--zarr-config-url", "s3://bucket/user/cfg.yaml",
-                "--job-queue", "q", "--steps", "stage,netcdf2zarr,zarr2cog"]
+                "--job-queue", "q", "--steps", steps]
         seen = {}
 
         def to_cog(args, zarr_path):
@@ -175,8 +175,49 @@ class TestDaacDispatch:
         nc.assert_not_called()
         assert cog_args == ("output/t.zarr", "time", "latitude", "longitude", GRANULE)
 
+    def test_geotiff_granule_with_the_cog2zarr_step_name(self, workdir):
+        tif, nc, cog_args = self._run_main(TIFF, steps="stage,cog2zarr,zarr2cog")
+        assert tif.call_args.args[1] == TIFF
+        nc.assert_not_called()
+        assert cog_args == ("output/t.zarr", "time", "latitude", "longitude", GRANULE)
+
+    def test_geotiff_granule_with_all_steps(self, workdir):
+        with patch.object(localized_pipeline, "submit_catalog_job") as submit:
+            tif, nc, cog_args = self._run_main(TIFF, steps="all")
+        assert tif.call_args.args[1] == TIFF
+        nc.assert_not_called()
+        submit.assert_called_once()
+        assert cog_args == ("output/t.zarr", "time", "latitude", "longitude", GRANULE)
+
+    def test_geotiff_granule_never_reaches_cf2zarr(self, workdir):
+        # no to-Zarr step listed: the GeoTIFF is left alone rather than handed to the NetCDF converter
+        tif, nc, cog_args = self._run_main(TIFF, steps="stage,zarr2cog")
+        tif.assert_not_called()
+        nc.assert_not_called()
+        assert cog_args == (TIFF, "time", "lat", "lon", None)
+
     def test_netcdf_granule(self, workdir):
         tif, nc, cog_args = self._run_main("output/granule.nc")
         tif.assert_not_called()
         nc.assert_called_once()
         assert cog_args == ("output/n.zarr", "time", "lat", "lon", None)
+
+    def test_netcdf_granule_ignores_the_cog2zarr_step_name(self, workdir):
+        tif, nc, cog_args = self._run_main("output/granule.nc", steps="stage,netcdf2zarr,cog2zarr,zarr2cog")
+        tif.assert_not_called()
+        nc.assert_called_once()
+        assert cog_args == ("output/n.zarr", "time", "lat", "lon", None)
+
+
+class TestEnabledSteps:
+    def test_all_steps_for_a_daac_granule_include_both_converters(self):
+        assert localized_pipeline.get_enabled_steps("all", "daac") == \
+            ['stage', 'netcdf2zarr', 'cog2zarr', 'zarr2cog', 'catalog']
+
+    def test_cog2zarr_is_a_valid_explicit_step(self):
+        assert localized_pipeline.get_enabled_steps("stage, cog2zarr ,zarr2cog", "daac") == \
+            ['stage', 'cog2zarr', 'zarr2cog']
+
+    def test_unknown_step_is_rejected(self):
+        with pytest.raises(ValueError, match="Invalid steps"):
+            localized_pipeline.get_enabled_steps("stage,tif2zarr", "daac")

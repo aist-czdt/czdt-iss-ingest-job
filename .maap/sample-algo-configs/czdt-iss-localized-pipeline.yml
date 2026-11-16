@@ -71,7 +71,7 @@ inputs:
     name: maap_host
     required: false
   - default: "all"
-    description: Comma-separated list of steps to run - stage,netcdf2zarr,concat,zarr2cog,catalog (default all)
+    description: Comma-separated list of steps to run - stage,netcdf2zarr,cog2zarr,concat,zarr2cog,catalog (default all)
     name: steps
     required: false
   - default: "auto"
