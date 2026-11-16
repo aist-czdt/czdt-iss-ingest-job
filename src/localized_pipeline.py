@@ -229,7 +229,7 @@ def convert_netcdf_to_zarr_local(args) -> str:
         
         # Call cf2zarr function directly
         cf2zarr.convert_cf_to_zarr(
-            config_path=args.zarr_config_url,
+            config_path=localize_config(args.zarr_config_url, getattr(args, 'role_arn', None)),
             input_path=input_source,
             output_path=output_path,
             pattern="*.nc*",  # Support both .nc and .nc4
@@ -243,6 +243,82 @@ def convert_netcdf_to_zarr_local(args) -> str:
     except Exception as e:
         logger.error(f"NetCDF to Zarr conversion failed: {e}")
         raise RuntimeError(f"NetCDF to Zarr conversion failed: {e}")
+
+def is_geotiff(path: str) -> bool:
+    """True when the path names a GeoTIFF (.tif / .tiff, any case)."""
+    return bool(path) and path.lower().endswith(('.tif', '.tiff'))
+
+
+def localize_config(config_url: str, role_arn: str = None) -> str:
+    """
+    Return a local path for a transformer config, downloading it first when it is an S3 URL.
+
+    The transformers read their config with a plain open(), so an s3:// URL handed straight through fails with a
+    misleading "[Errno 2] No such file or directory: 's3://...'" (2026-11-16, DSWx-HLS). Local paths and unset
+    values are returned unchanged.
+    """
+    if not config_url or not config_url.startswith('s3://'):
+        return config_url
+
+    bucket_name, key = AWSUtils.parse_s3_path(config_url)
+    os.makedirs("input", exist_ok=True)
+    local_path = os.path.join("input", os.path.basename(key))
+
+    try:
+        # Same access path the preprocessing pipelines use for their configs: the job's role
+        s3_client = AWSUtils.get_s3_client(role_arn=role_arn, bucket_name=bucket_name)
+        s3_client.download_file(bucket_name, key, local_path)
+    except Exception as e:
+        if not role_arn:
+            raise
+        logger.warning(f"Could not download {config_url} with role {role_arn} ({e}); retrying with the worker's own credentials")
+        s3_client = AWSUtils.get_s3_client(bucket_name=bucket_name)
+        s3_client.download_file(bucket_name, key, local_path)
+
+    logger.info(f"Localized config {config_url} to {local_path}")
+    return local_path
+
+
+def convert_geotiff_to_zarr_local(args, input_tiff: str) -> str:
+    """
+    Convert a GeoTIFF granule (e.g. OPERA DSWx) to Zarr using a direct cog2zarr function call.
+
+    For GeoTIFF input, args.zarr_config_url must point to a cog2zarr config (band map, filename pattern and
+    timestamp, target bbox and resolution; see czdt-iss-transformers schema/geotiff_schema.yaml), not a cf2zarr
+    chunking config. Output variables are named by the config's band_map, so args.variables is not used. The
+    output grid is regular EPSG:4326 with dimensions time/latitude/longitude.
+    """
+    logger.info(f"CONVERT_GEOTIFF_TO_ZARR - Args: input_tiff='{input_tiff}', zarr_config_url='{args.zarr_config_url}'")
+    logger.debug(f"Starting local GeoTIFF to Zarr conversion for input: {input_tiff}")
+
+    if not args.zarr_config_url:
+        raise ValueError("--zarr-config-url (a cog2zarr GeoTIFF config) is required for GeoTIFF input")
+
+    # Imported here, not at module import: the unit tests stub the transformer modules they need by name
+    import czdt_iss_transformers.cog2zarr as cog2zarr
+
+    # Prepare output directory
+    os.makedirs("output", exist_ok=True)
+
+    base_name = os.path.splitext(os.path.basename(input_tiff))[0]
+    output_path = os.path.join("output", f"{base_name}.zarr")
+
+    print(f"Running GeoTIFF to Zarr conversion")
+
+    try:
+        cog2zarr.convert_cog_to_zarr(
+            config_path=localize_config(args.zarr_config_url, getattr(args, 'role_arn', None)),
+            input_path=input_tiff,
+            output_path=output_path,
+        )
+
+        logger.debug(f"GeoTIFF to Zarr conversion completed, output: {output_path}")
+        return output_path
+
+    except Exception as e:
+        logger.error(f"GeoTIFF to Zarr conversion failed: {e}")
+        raise RuntimeError(f"GeoTIFF to Zarr conversion failed: {e}")
+
 
 def concatenate_zarr_local(args, zarr_paths: List[str]) -> str:
     """
@@ -291,8 +367,12 @@ def convert_zarr_to_cog_local(args, zarr_path: str) -> List[str]:
     time_coord = getattr(args, 'time_coord', 'time')
     lat_coord = getattr(args, 'lat_coord', 'lat') 
     lon_coord = getattr(args, 'lon_coord', 'lon')
+
+    # COG filename prefix. The STAC item id is the COG filename, "<prefix>_<time>_<variable>", so tiled products
+    # (several granules for one time step) need a per-granule prefix or their items overwrite each other.
+    output_prefix = getattr(args, 'cog_output_prefix', None) or "cog"
     
-    logger.info(f"CONVERT_ZARR_TO_COG - Args: zarr_path='{zarr_path}', concept_id='{concept_id}', output='cog', time='{time_coord}', latitude='{lat_coord}', longitude='{lon_coord}', zarr_access='stage'")
+    logger.info(f"CONVERT_ZARR_TO_COG - Args: zarr_path='{zarr_path}', concept_id='{concept_id}', output='{output_prefix}', time='{time_coord}', latitude='{lat_coord}', longitude='{lon_coord}', zarr_access='stage'")
     logger.debug(f"Starting local Zarr to COG conversion for: {zarr_path}")
     
     print(f"Running Zarr to COG conversion")
@@ -305,7 +385,7 @@ def convert_zarr_to_cog_local(args, zarr_path: str) -> List[str]:
         cog_args = SimpleNamespace(
             zarr=zarr_path,
             concept_id=concept_id,
-            output="cog",
+            output=output_prefix,
             time=time_coord,
             latitude=lat_coord,
             longitude=lon_coord,
@@ -493,7 +573,14 @@ def main():
                 current_output, source_granule_id = stage_from_daac_local(args, maap)
                 args.source_granule_id = source_granule_id
             
-            if 'netcdf2zarr' in enabled_steps and current_output:
+            if 'netcdf2zarr' in enabled_steps and current_output and is_geotiff(current_output):
+                # GeoTIFF granules (e.g. OPERA DSWx) take the place of the netcdf2zarr step with cog2zarr, which
+                # always writes time/latitude/longitude and one full-grid slice per granule
+                logger.info(f"GeoTIFF granule detected, converting with cog2zarr: {current_output}")
+                current_output = convert_geotiff_to_zarr_local(args, current_output)
+                args.time_coord, args.lat_coord, args.lon_coord = 'time', 'latitude', 'longitude'
+                args.cog_output_prefix = args.granule_id
+            elif 'netcdf2zarr' in enabled_steps and current_output:
                 # Temporarily set input_netcdf for convert function
                 args.input_netcdf = current_output
                 current_output = convert_netcdf_to_zarr_local(args)

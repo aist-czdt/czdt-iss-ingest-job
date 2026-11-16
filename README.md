@@ -103,6 +103,13 @@ python src/localized_pipeline.py \
 - `--input-s3`: S3 NetCDF/Zarr/GeoPackage file processing  
 - `--input-netcdf`: Local NetCDF file processing
 
+**GeoTIFF granules (e.g. OPERA DSWx):** when the staged DAAC granule is a `.tif`, the pipeline converts it with
+`cog2zarr` instead of `cf2zarr`. For these collections `--zarr-config-url` must point to a `cog2zarr` config (band
+map, filename pattern and timestamp, target bbox and `resolution_deg`; see `sample_opera_dswx_hls_cfg.yaml` in
+czdt-iss-transformers). Each granule becomes one COG per band on the config's full bbox grid, named
+`<granule id>_<time>_<band>`, so keep bbox and resolution modest. The gridding parameters (`gridding_config_url`,
+`output_extent`, `grid_resolution`, `format`) do not apply.
+
 ### Preprocessing Pipelines
 
 #### LIS Data Preprocessing
